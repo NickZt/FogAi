@@ -1,0 +1,1 @@
+. "/home/nickzt/Projects/TactOrder/MNNLLama/inference-services/mnn-service/conanbuildenv-release-x86_64.sh"

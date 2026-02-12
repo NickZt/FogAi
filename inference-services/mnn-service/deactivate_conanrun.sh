@@ -1,0 +1,1 @@
+. "/home/nickzt/Projects/TactOrder/MNNLLama/inference-services/mnn-service/deactivate_conanrunenv-release-x86_64.sh"

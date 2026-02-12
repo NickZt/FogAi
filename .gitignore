@@ -1,2 +1,3 @@
 gateway/build/*
 gateway/.gradle/*
+inference-services/mnn-service/build/*

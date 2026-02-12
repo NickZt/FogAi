@@ -7,7 +7,6 @@ import io.vertx.kotlin.coroutines.CoroutineVerticle
 import io.vertx.kotlin.coroutines.coAwait
 import org.slf4j.LoggerFactory
 
-import com.tactorder.gateway.router.Router
 
 class GatewayVerticle : CoroutineVerticle() {
     private val logger = LoggerFactory.getLogger(GatewayVerticle::class.java)
