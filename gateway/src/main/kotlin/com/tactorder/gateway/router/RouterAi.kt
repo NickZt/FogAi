@@ -3,7 +3,7 @@ package com.tactorder.gateway.router
 import com.tactorder.gateway.client.InferenceClient
 import io.vertx.core.Vertx
 
-class Router(private val vertx: Vertx) {
+class RouterAi(private val vertx: Vertx) {
     // fast look-up map for clients
     private val clients = mutableMapOf<String, InferenceClient>()
     

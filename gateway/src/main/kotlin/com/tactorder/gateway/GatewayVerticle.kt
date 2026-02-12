@@ -1,6 +1,7 @@
 package com.tactorder.gateway
 
 import com.tactorder.gateway.api.ChatCompletionHandler
+import com.tactorder.gateway.router.RouterAi
 import io.vertx.ext.web.Router
 import io.vertx.ext.web.handler.BodyHandler
 import io.vertx.kotlin.coroutines.CoroutineVerticle
@@ -18,16 +19,16 @@ class GatewayVerticle : CoroutineVerticle() {
         DatabindCodec.prettyMapper().registerModule(com.fasterxml.jackson.module.kotlin.KotlinModule.Builder().build())
 
         val router = Router.router(vertx)
-        val gatewayRouter = com.tactorder.gateway.router.Router(vertx)
+        val gatewayRouterAi = RouterAi(vertx)
         
         // Body handler to parse JSON bodies
         router.route().handler(BodyHandler.create())
 
         // API Routes
-        val chatHandler = ChatCompletionHandler(gatewayRouter)
+        val chatHandler = ChatCompletionHandler(gatewayRouterAi)
         router.post("/v1/chat/completions").handler(chatHandler::handle)
         
-        val embeddingsHandler = com.tactorder.gateway.api.EmbeddingsHandler(gatewayRouter)
+        val embeddingsHandler = com.tactorder.gateway.api.EmbeddingsHandler(gatewayRouterAi)
         router.post("/v1/embeddings").handler(embeddingsHandler::handle)
         
         // Health check

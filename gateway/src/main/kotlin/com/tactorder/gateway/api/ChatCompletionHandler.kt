@@ -2,10 +2,8 @@ package com.tactorder.gateway.api
 
 import com.tactorder.gateway.model.ChatCompletionRequest
 import com.tactorder.gateway.model.ChatCompletionResponse
-import com.tactorder.gateway.model.ChatChoice
-import com.tactorder.gateway.model.ChatMessage
 import com.tactorder.gateway.model.Usage
-import com.tactorder.gateway.router.Router
+import com.tactorder.gateway.router.RouterAi
 import com.tactorder.inference.proto.ChatRequest
 import com.tactorder.inference.proto.Message
 import io.vertx.core.json.Json
@@ -17,7 +15,7 @@ import kotlinx.coroutines.CoroutineScope
 import org.slf4j.LoggerFactory
 import java.util.UUID
 
-class ChatCompletionHandler(private val router: Router) {
+class ChatCompletionHandler(private val routerAi: RouterAi) {
     private val logger = LoggerFactory.getLogger(ChatCompletionHandler::class.java)
 
     fun handle(ctx: RoutingContext) {
@@ -31,7 +29,7 @@ class ChatCompletionHandler(private val router: Router) {
 
         logger.info("Received request for model: ${request.model}")
 
-        val client = router.getClientForModel(request.model)
+        val client = routerAi.getClientForModel(request.model)
         if (client == null) {
             ctx.response().setStatusCode(404).end("Model not found")
             return

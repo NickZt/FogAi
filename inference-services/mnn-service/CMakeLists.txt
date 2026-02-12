@@ -16,7 +16,7 @@ include(FetchContent)
 FetchContent_Declare(
     MNN
     GIT_REPOSITORY https://github.com/alibaba/MNN.git
-    GIT_TAG        2.8.0 # Use a stable tag
+    GIT_TAG        master # Use master for LLM support
     GIT_SHALLOW    TRUE
     OVERRIDE_FIND_PACKAGE
 )
@@ -24,6 +24,9 @@ FetchContent_Declare(
 set(MNN_BUILD_DEMO OFF CACHE BOOL "" FORCE)
 set(MNN_BUILD_TOOLS OFF CACHE BOOL "" FORCE)
 set(MNN_BUILD_TEST OFF CACHE BOOL "" FORCE)
+set(MNN_BUILD_LLM ON CACHE BOOL "" FORCE) # Enable LLM
+set(MNN_AVX512 ON CACHE BOOL "" FORCE) # Enable AVX512
+set(MNN_OPENMP ON CACHE BOOL "" FORCE) # Enable OpenMP for multi-threading
 
 FetchContent_MakeAvailable(MNN)
 
@@ -62,5 +65,6 @@ target_include_directories(inference_proto PUBLIC "${PROTO_GEN_DIR}")
 
 # Main executable
 add_executable(mnn-service src/main.cpp src/service_impl.cpp)
-target_link_libraries(mnn-service PRIVATE inference_proto MNN)
-target_include_directories(mnn-service PRIVATE src)
+# Link MNN, MNN_Express, and llm libraries
+target_link_libraries(mnn-service PRIVATE inference_proto MNN MNN_Express llm)
+target_include_directories(mnn-service PRIVATE src "${mnn_SOURCE_DIR}/include")  # Add MNN includes

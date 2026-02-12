@@ -4,7 +4,7 @@ import com.tactorder.gateway.model.EmbeddingRequest
 import com.tactorder.gateway.model.EmbeddingResponse
 import com.tactorder.gateway.model.EmbeddingData
 import com.tactorder.gateway.model.Usage
-import com.tactorder.gateway.router.Router
+import com.tactorder.gateway.router.RouterAi
 import com.tactorder.inference.proto.EmbeddingRequest as ProtoEmbeddingRequest
 import io.vertx.ext.web.RoutingContext
 import kotlinx.coroutines.CoroutineScope
@@ -12,7 +12,7 @@ import kotlinx.coroutines.launch
 import io.vertx.kotlin.coroutines.dispatcher
 import org.slf4j.LoggerFactory
 
-class EmbeddingsHandler(private val router: Router) {
+class EmbeddingsHandler(private val routerAi: RouterAi) {
     private val logger = LoggerFactory.getLogger(EmbeddingsHandler::class.java)
 
     fun handle(ctx: RoutingContext) {
@@ -26,7 +26,7 @@ class EmbeddingsHandler(private val router: Router) {
 
         logger.info("Received embedding request for model: ${request.model}")
 
-        val client = router.getClientForModel(request.model)
+        val client = routerAi.getClientForModel(request.model)
         if (client == null) {
             ctx.response().setStatusCode(404).end("Model not found")
             return
