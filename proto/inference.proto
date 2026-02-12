@@ -1,0 +1,78 @@
+syntax = "proto3";
+
+package tactorder.inference;
+
+option java_package = "com.tactorder.inference.proto";
+option java_multiple_files = true;
+
+service InferenceService {
+  // Chat completion with streaming support
+  rpc ChatCompletion (ChatRequest) returns (stream ChatResponse);
+
+  // Embedding generation
+  rpc Embeddings (EmbeddingRequest) returns (EmbeddingResponse);
+}
+
+// --- Chat Completion ---
+
+message ChatRequest {
+  string model_id = 1;
+  repeated Message messages = 2;
+  float temperature = 3;
+  float top_p = 4;
+  int32 max_tokens = 5;
+  bool stream = 6;
+  repeated string stop = 7;
+  // Add other parameters as needed (frequency_penalty, etc.)
+}
+
+message Message {
+  string role = 1; // "system", "user", "assistant"
+  string content = 2;
+}
+
+message ChatResponse {
+  string id = 1;
+  string model = 2;
+  int64 created = 3;
+  repeated Choice choices = 4;
+}
+
+message Choice {
+  int32 index = 1;
+  Delta delta = 2; // For streaming, we use Delta
+  string finish_reason = 3;
+}
+
+message Delta {
+  string role = 1;
+  string content = 2;
+}
+
+// --- Embeddings ---
+
+message EmbeddingRequest {
+  string model_id = 1;
+  oneof input {
+    string text = 2;
+    // repeated string tokens = 3; // Future support for pre-tokenized input
+  }
+}
+
+message EmbeddingResponse {
+  string object = 1; // "list"
+  repeated Embedding data = 2;
+  string model = 3;
+  Usage usage = 4;
+}
+
+message Embedding {
+  string object = 1; // "embedding"
+  int32 index = 2;
+  repeated float embedding = 3;
+}
+
+message Usage {
+  int32 prompt_tokens = 1;
+  int32 total_tokens = 2;
+}
