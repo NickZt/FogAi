@@ -1,0 +1,10 @@
+{
+  "model": "mnn-mock-model",
+  "messages": [
+    {
+      "role": "user",
+      "content": "Hello!"
+    }
+  ],
+  "stream": true
+}

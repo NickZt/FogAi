@@ -4,6 +4,7 @@ import com.tactorder.inference.proto.ChatRequest
 import com.tactorder.inference.proto.ChatResponse
 import com.tactorder.inference.proto.VertxInferenceServiceGrpc
 import io.vertx.core.Vertx
+import io.vertx.kotlin.coroutines.coAwait
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.channels.awaitClose
@@ -38,5 +39,9 @@ class InferenceClient(private val vertx: Vertx, private val host: String, privat
          awaitClose {
              // specific logic to cancel stream if needed, usually grpc stream cancellation
          }
+    }
+
+    suspend fun embeddings(request: com.tactorder.inference.proto.EmbeddingRequest): com.tactorder.inference.proto.EmbeddingResponse {
+        return stub.embeddings(request).coAwait()
     }
 }

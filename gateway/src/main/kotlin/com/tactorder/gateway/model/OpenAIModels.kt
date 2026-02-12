@@ -46,3 +46,23 @@ data class Usage(
     @JsonProperty("completion_tokens") val completionTokens: Int,
     @JsonProperty("total_tokens") val totalTokens: Int
 )
+
+data class EmbeddingRequest(
+    val model: String,
+    val input: Any, // String or List<String>
+    val user: String? = null
+)
+
+@JsonInclude(JsonInclude.Include.NON_NULL)
+data class EmbeddingResponse(
+    val `object`: String = "list",
+    val data: List<EmbeddingData>,
+    val model: String,
+    val usage: Usage? = null
+)
+
+data class EmbeddingData(
+    val `object`: String = "embedding",
+    val index: Int,
+    val embedding: List<Float>
+)

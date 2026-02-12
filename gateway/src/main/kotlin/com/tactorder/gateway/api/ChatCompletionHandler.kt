@@ -25,7 +25,7 @@ class ChatCompletionHandler(private val router: Router) {
             ctx.body().asPojo(ChatCompletionRequest::class.java)
         } catch (e: Exception) {
             logger.warn("Invalid request body", e)
-            ctx.response().setStatusCode(400).end("Invalid JSON")
+            ctx.response().setStatusCode(400).end("Invalid JSON: ${e.message}")
             return
         }
 
@@ -99,7 +99,10 @@ class ChatCompletionHandler(private val router: Router) {
                         choices = listOf(
                             com.tactorder.gateway.model.ChatChoice(
                                 index = 0,
-                                message = com.tactorder.gateway.model.ChatMessage("assistant", sb.toString()),
+                                message = com.tactorder.gateway.model.ChatMessage(
+                                    role = if (sb.isNotEmpty() && responses.isNotEmpty() && responses[0].choicesList.isNotEmpty()) responses[0].choicesList[0].delta.role.ifEmpty { "assistant" } else "assistant", 
+                                    content = sb.toString()
+                                ),
                                 delta = null,
                                 finishReason = "stop"
                             )
