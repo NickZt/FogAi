@@ -67,4 +67,4 @@ target_include_directories(inference_proto PUBLIC "${PROTO_GEN_DIR}")
 add_executable(mnn-service src/main.cpp src/service_impl.cpp)
 # Link MNN, MNN_Express, and llm libraries
 target_link_libraries(mnn-service PRIVATE inference_proto MNN MNN_Express llm)
-target_include_directories(mnn-service PRIVATE src "${mnn_SOURCE_DIR}/include")  # Add MNN includes
+target_include_directories(mnn-service PRIVATE src "${mnn_SOURCE_DIR}/include" "${mnn_SOURCE_DIR}/transformers/llm/engine/include")  # Add MNN LLM includes

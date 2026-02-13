@@ -1,22 +1,57 @@
 #include "service_impl.h"
-#include <MNN/Interpreter.hpp>
-#include <MNN/expr/Executor.hpp>
-#include <MNN/expr/ExprCreator.hpp>
 #include <chrono>
 #include <iostream>
-#include <memory>
 #include <thread>
 
 namespace tactorder {
 namespace inference {
 
-InferenceServiceImpl::InferenceServiceImpl(const std::string &model_path)
-    : model_path_(model_path) {
+// --- GrpcStreamBuf Implementation ---
+
+int GrpcStreamBuf::overflow(int c) {
+  if (c != EOF) {
+    buffer_ += static_cast<char>(c);
+    // Optional: Flush on newline or specific size to ensure responsiveness
+    // But std::ostream usually handles buffering.
+    // We rely on sync() which is called by flush() or endl.
+  }
+  return c;
+}
+
+int GrpcStreamBuf::sync() {
+  flush_buffer();
+  return 0;
+}
+
+void GrpcStreamBuf::flush_buffer() {
+  if (buffer_.empty())
+    return;
+
+  ChatResponse response;
+  // Use a fixed ID for the stream or generate one
+  response.set_id("chatcmpl-" + model_id_);
+  response.set_created(time(nullptr));
+  response.set_model(model_id_);
+
+  auto *choice = response.add_choices();
+  choice->set_index(0);
+  auto *delta = choice->mutable_delta();
+  delta->set_content(buffer_);
+
+  writer_->Write(response);
+  buffer_.clear();
+}
+
+// --- InferenceServiceImpl Implementation ---
+
+InferenceServiceImpl::InferenceServiceImpl(const std::string &model_config_path)
+    : model_config_path_(model_config_path) {
   if (LoadModel()) {
-    std::cout << "MNN Model loaded successfully from: " << model_path_
+    std::cout << "MNN Llm Initialized successfully from: " << model_config_path_
               << std::endl;
   } else {
-    std::cerr << "Failed to load MNN Model from: " << model_path_ << std::endl;
+    std::cerr << "Failed to initialize MNN Llm from: " << model_config_path_
+              << std::endl;
   }
 }
 
@@ -24,44 +59,16 @@ InferenceServiceImpl::~InferenceServiceImpl() = default;
 
 bool InferenceServiceImpl::LoadModel() {
   try {
-    MNN::ScheduleConfig config;
-    MNN::BackendConfig backendConfig;
-    config.type = MNN_FORWARD_CPU;
-    config.numThread = 4; // Adjust as needed
-    backendConfig.precision = MNN::BackendConfig::Precision_Low;
-    backendConfig.memory = MNN::BackendConfig::Memory_Low;
-    config.backendConfig = &backendConfig;
+    // Create LLM instance from config.json
+    llm_.reset(MNN::Transformer::Llm::createLLM(model_config_path_));
 
-    std::shared_ptr<MNN::Express::Executor::RuntimeManager> runtime_manager(
-        MNN::Express::Executor::RuntimeManager::createRuntimeManager(config));
-
-    // Set external file for weights (model_path + ".weight")
-    std::string external_weight_path = model_path_ + ".weight";
-    runtime_manager->setExternalFile(external_weight_path);
-
-    MNN::Express::Module::Config module_config;
-    module_config.shapeMutable = true;
-    module_config.rearrange = true;
-
-    std::cout << "Loading MNN Module with external weights from: "
-              << external_weight_path << std::endl;
-
-    // Attempt load with standard LLM inputs/outputs
-    // Qwen2-0.5B-Instruct-MNN uses "logits" and "presents" (or
-    // "past_key_values") We try "logits" as the primary output.
-    llm_module_.reset(MNN::Express::Module::load(
-        {"input_ids", "attention_mask", "position_ids", "past_key_values"},
-        {"logits", "presents"}, model_path_.c_str(), runtime_manager,
-        &module_config));
-
-    if (llm_module_) {
-      std::cout << "Loaded via MNN::Express::Module with RuntimeManager!"
-                << std::endl;
-      return true;
+    if (!llm_) {
+      std::cerr << "Llm::createLLM returned null." << std::endl;
+      return false;
     }
 
-    std::cerr << "Module load returned null." << std::endl;
-    return false;
+    llm_->load();
+    return true;
   } catch (const std::exception &e) {
     std::cerr << "Exception loading model: " << e.what() << std::endl;
     return false;
@@ -75,33 +82,42 @@ InferenceServiceImpl::ChatCompletion(ServerContext *context,
   std::cout << "Received Chat Completion Request for model: "
             << request->model_id() << std::endl;
 
-  std::string response_text = "Model " + request->model_id() + " is loaded. ";
-  if (llm_module_) {
-    response_text += "MNN Module is ready (Logits available). ";
-  } else {
-    response_text += "MNN Module failed to load.";
+  if (!llm_) {
+    return Status(grpc::INTERNAL, "Model not loaded");
   }
 
-  ChatResponse response;
-  response.set_id(
-      "chatcmpl-mnn-" +
-      std::to_string(
-          std::chrono::system_clock::now().time_since_epoch().count()));
-  response.set_created(time(nullptr));
-  response.set_model(request->model_id());
+  // Convert ChatRequest messages to MNN::Transformer::ChatMessages
+  MNN::Transformer::ChatMessages messages;
+  for (const auto &msg : request->messages()) {
+    messages.emplace_back(msg.role(), msg.content());
+  }
 
-  auto *choice = response.add_choices();
+  // Create custom output stream for streaming response
+  GrpcStreamBuf stream_buf(writer, request->model_id());
+  std::ostream os(&stream_buf);
+
+  // Generate response
+  // response() blocks until generation is complete, but writes to os
+  // progressively
+  try {
+    llm_->response(messages, &os);
+  } catch (const std::exception &e) {
+    std::cerr << "Error during inference: " << e.what() << std::endl;
+    return Status(grpc::INTERNAL, "Inference failed: " + std::string(e.what()));
+  }
+
+  // Ensure final flush
+  os.flush();
+
+  // Send finish reason
+  ChatResponse final_response;
+  final_response.set_id("chatcmpl-" + request->model_id());
+  final_response.set_created(time(nullptr));
+  final_response.set_model(request->model_id());
+  auto *choice = final_response.add_choices();
   choice->set_index(0);
-  auto *delta = choice->mutable_delta();
-  delta->set_role("assistant");
-  delta->set_content(response_text);
-
-  writer->Write(response);
-
-  // Finish
-  ChatResponse final_response = response;
-  final_response.mutable_choices(0)->set_finish_reason("stop");
-  final_response.mutable_choices(0)->mutable_delta()->set_content("");
+  choice->set_finish_reason("stop");
+  choice->mutable_delta(); // empty delta
   writer->Write(final_response);
 
   return Status::OK;
@@ -110,19 +126,9 @@ InferenceServiceImpl::ChatCompletion(ServerContext *context,
 Status InferenceServiceImpl::Embeddings(ServerContext *context,
                                         const EmbeddingRequest *request,
                                         EmbeddingResponse *response) {
-  std::cout << "Received Embeddings Request for model: " << request->model_id()
-            << std::endl;
-  // Mock response
-  response->set_object("list");
-  response->set_model(request->model_id());
-
-  auto *embedding = response->add_data();
-  embedding->set_object("embedding");
-  embedding->set_index(0);
-  embedding->add_embedding(0.1f);
-  embedding->add_embedding(0.2f);
-  embedding->add_embedding(0.3f);
-
+  // Embeddings implementation remains mock/todo for now as Llm class focuses on
+  // generation MNN::Transformer::Embedding class exists but we initialized Llm.
+  // TODO: Support Embeddings
   return Status::OK;
 }
 
