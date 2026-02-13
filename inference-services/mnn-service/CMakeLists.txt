@@ -13,22 +13,36 @@ find_package(gRPC REQUIRED)
 
 # Fetch MNN
 include(FetchContent)
-FetchContent_Declare(
-    MNN
-    GIT_REPOSITORY https://github.com/alibaba/MNN.git
-    GIT_TAG        master # Use master for LLM support
-    GIT_SHALLOW    TRUE
-    OVERRIDE_FIND_PACKAGE
-)
-# Disable MNN demo/test/tools to speed up build
-set(MNN_BUILD_DEMO OFF CACHE BOOL "" FORCE)
-set(MNN_BUILD_TOOLS OFF CACHE BOOL "" FORCE)
-set(MNN_BUILD_TEST OFF CACHE BOOL "" FORCE)
-set(MNN_BUILD_LLM ON CACHE BOOL "" FORCE) # Enable LLM
-set(MNN_AVX512 ON CACHE BOOL "" FORCE) # Enable AVX512
-set(MNN_OPENMP ON CACHE BOOL "" FORCE) # Enable OpenMP for multi-threading
+# --- MNN Dependency (Submodule) ---
+set(MNN_BUILD_LLM ON CACHE BOOL "Enable MNN LLM" FORCE)
+set(MNN_OPENMP OFF CACHE BOOL "Disable OpenMP" FORCE)
+set(MNN_AVX512 OFF CACHE BOOL "Disable AVX512 for stability" FORCE)
+set(MNN_USE_THREAD_POOL ON CACHE BOOL "Use ThreadPool" FORCE)
 
-FetchContent_MakeAvailable(MNN)
+# Check if submodule exists
+message(STATUS "Checking for submodule at: ${CMAKE_CURRENT_SOURCE_DIRECTORY}/MNN/CMakeLists.txt")
+if(NOT EXISTS "${CMAKE_CURRENT_SOURCE_DIRECTORY}/MNN/CMakeLists.txt")
+    message(WARNING "MNN submodule not found via check! But proceeding to try add_subdirectory...")
+    # message(FATAL_ERROR "MNN submodule not found! Run 'git submodule update --init --recursive'")
+endif()
+
+add_subdirectory(MNN)
+
+include_directories(
+    ${CMAKE_CURRENT_SOURCE_DIRECTORY}/MNN/include
+    ${CMAKE_CURRENT_SOURCE_DIRECTORY}/MNN/transformers/llm/engine/include
+    ${CMAKE_CURRENT_SOURCE_DIRECTORY}/src
+)
+
+# FetchContent_MakeAvailable(MNN) - REMOVED
+
+# Fetch nlohmann/json
+FetchContent_Declare(
+    json
+    GIT_REPOSITORY https://github.com/nlohmann/json.git
+    GIT_TAG        v3.11.2
+)
+FetchContent_MakeAvailable(json)
 
 # Proto file generation
 set(PROTO_SRC_DIR "${CMAKE_SOURCE_DIR}/../../proto")
@@ -66,5 +80,9 @@ target_include_directories(inference_proto PUBLIC "${PROTO_GEN_DIR}")
 # Main executable
 add_executable(mnn-service src/main.cpp src/service_impl.cpp)
 # Link MNN, MNN_Express, and llm libraries
-target_link_libraries(mnn-service PRIVATE inference_proto MNN MNN_Express llm)
-target_include_directories(mnn-service PRIVATE src "${mnn_SOURCE_DIR}/include" "${mnn_SOURCE_DIR}/transformers/llm/engine/include")  # Add MNN LLM includes
+# Link MNN, MNN_Express, and llm libraries
+# Link MNN, MNN_Express, and llm libraries
+# Link MNN, MNN_Express, llm, and json libraries
+target_link_libraries(mnn-service PRIVATE inference_proto MNN MNN_Express llm nlohmann_json::nlohmann_json)
+message(STATUS "Including MNN headers from: ${CMAKE_CURRENT_SOURCE_DIR}/MNN/include")
+target_include_directories(mnn-service PUBLIC src "${CMAKE_CURRENT_SOURCE_DIR}/MNN/include" "${CMAKE_CURRENT_SOURCE_DIR}/MNN/transformers/llm/engine/include")

@@ -17,6 +17,7 @@ class InferenceClient(private val vertx: Vertx, private val host: String, privat
         val channel = io.vertx.grpc.VertxChannelBuilder
             .forAddress(vertx, host, port)
             .usePlaintext()
+            .maxInboundMessageSize(50 * 1024 * 1024)
             .build()
         stub = VertxInferenceServiceGrpc.newVertxStub(channel)
     }
@@ -43,5 +44,9 @@ class InferenceClient(private val vertx: Vertx, private val host: String, privat
 
     suspend fun embeddings(request: com.tactorder.inference.proto.EmbeddingRequest): com.tactorder.inference.proto.EmbeddingResponse {
         return stub.embeddings(request).coAwait()
+    }
+
+    suspend fun listModels(): com.tactorder.inference.proto.ListModelsResponse {
+        return stub.listModels(com.tactorder.inference.proto.ListModelsRequest.newBuilder().build()).coAwait()
     }
 }

@@ -1,0 +1,3 @@
+[submodule "inference-services/mnn-service/MNN"]
+	path = inference-services/mnn-service/MNN
+	url = https://github.com/alibaba/MNN.git

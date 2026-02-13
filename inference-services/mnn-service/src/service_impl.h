@@ -2,7 +2,7 @@
 #define SERVICE_IMPL_H
 
 #include "inference.grpc.pb.h"
-#include <MNN/Interpreter.hpp>
+// #include <MNN/Interpreter.hpp>
 #include <grpcpp/grpcpp.h>
 #include <iostream>
 #include <llm/llm.hpp> // High-level LLM API
@@ -41,7 +41,7 @@ private:
 
 class InferenceServiceImpl final : public InferenceService::Service {
 public:
-  InferenceServiceImpl(const std::string &model_config_path);
+  InferenceServiceImpl(const std::string &input_path, bool is_directory);
   ~InferenceServiceImpl() override;
 
   Status ChatCompletion(ServerContext *context, const ChatRequest *request,
@@ -50,11 +50,25 @@ public:
   Status Embeddings(ServerContext *context, const EmbeddingRequest *request,
                     EmbeddingResponse *response) override;
 
-private:
-  bool LoadModel();
+  Status ListModels(ServerContext *context, const ListModelsRequest *request,
+                    ListModelsResponse *response) override;
 
-  std::string model_config_path_;
-  std::unique_ptr<MNN::Transformer::Llm> llm_;
+private:
+  // Returns pointer to loaded LLM, or nullptr if failed.
+  // Loads on demand if not already loaded.
+  MNN::Transformer::Llm *GetOrLoadModel(const std::string &model_id);
+  void ScanModels();
+
+  std::string input_path_;
+  bool is_directory_;
+
+  // model_id -> config_path
+  std::map<std::string, std::string> available_models_;
+
+  // model_id -> llm instance
+  std::map<std::string, std::unique_ptr<MNN::Transformer::Llm>> loaded_models_;
+
+  std::mutex model_mutex_; // Thread safety for loading
 };
 
 } // namespace inference

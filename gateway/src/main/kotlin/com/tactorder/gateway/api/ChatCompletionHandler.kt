@@ -39,7 +39,8 @@ class ChatCompletionHandler(private val routerAi: RouterAi) {
         val protoRequest = ChatRequest.newBuilder()
             .setModelId(request.model)
             .addAllMessages(request.messages.map { 
-                Message.newBuilder().setRole(it.role).setContent(it.content).build() 
+                val contentStr = if (it.content is String) it.content else Json.encode(it.content)
+                Message.newBuilder().setRole(it.role).setContent(contentStr).build() 
             })
             .setTemperature(request.temperature?.toFloat() ?: 0.7f)
             .setTopP(request.topP?.toFloat() ?: 1.0f)

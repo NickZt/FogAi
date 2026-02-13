@@ -11,6 +11,24 @@ service InferenceService {
 
   // Embedding generation
   rpc Embeddings (EmbeddingRequest) returns (EmbeddingResponse);
+
+  // Model discovery
+  rpc ListModels (ListModelsRequest) returns (ListModelsResponse);
+}
+
+// --- List Models ---
+
+message ListModelsRequest {}
+
+message ListModelsResponse {
+  repeated ModelCard models = 1;
+}
+
+message ModelCard {
+  string id = 1;
+  string object = 2; // "model"
+  int64 created = 3;
+  string owned_by = 4;
 }
 
 // --- Chat Completion ---

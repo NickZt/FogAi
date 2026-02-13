@@ -22,10 +22,10 @@ class GatewayVerticle : CoroutineVerticle() {
         val gatewayRouterAi = RouterAi(vertx)
         
         // Body handler to parse JSON bodies
-        router.route().handler(BodyHandler.create())
+        router.route().handler(BodyHandler.create().setBodyLimit(50 * 1024 * 1024)) // 50MB limit
 
         // API Routes
-        val modelsHandler = com.tactorder.gateway.api.ModelsHandler()
+        val modelsHandler = com.tactorder.gateway.api.ModelsHandler(gatewayRouterAi)
         router.get("/v1/models").handler(modelsHandler::handle)
 
         val chatHandler = ChatCompletionHandler(gatewayRouterAi)

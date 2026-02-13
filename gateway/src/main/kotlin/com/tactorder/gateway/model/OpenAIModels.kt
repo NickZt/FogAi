@@ -23,7 +23,7 @@ data class ChatCompletionRequest(
 
 data class ChatMessage(
     val role: String,
-    val content: String,
+    val content: Any, // String or List<Map<String, Any>>
     val name: String? = null
 )
 
