@@ -1,2 +1,3 @@
 /build/
 /*.log
+/bin/main/com/tactorder/inference/proto/

@@ -160,3 +160,130 @@ Java_com_tactorder_gateway_native_NativeEngine_generateString(JNIEnv *env,
 }
 
 } // extern "C"
+
+// ----------------------------------------------------------------------------
+// Embedding Implementation
+// ----------------------------------------------------------------------------
+
+std::unique_ptr<MNN::Transformer::Embedding> g_embedding_instance = nullptr;
+
+extern "C" {
+
+JNIEXPORT jboolean JNICALL
+Java_com_tactorder_gateway_native_NativeEngine_loadEmbeddingModel(
+    JNIEnv *env, jobject thiz, jstring modelPath) {
+  const char *path = env->GetStringUTFChars(modelPath, nullptr);
+  if (path == nullptr)
+    return JNI_FALSE;
+
+  std::string config_path(path);
+  env->ReleaseStringUTFChars(modelPath, path);
+
+  fprintf(stderr,
+          "[NativeBridge] NativeEngine_loadEmbeddingModel called with: %s\n",
+          config_path.c_str());
+  fflush(stderr);
+
+  try {
+    if (g_embedding_instance) {
+      g_embedding_instance.reset();
+    }
+
+    std::cout << "[NativeBridge] Loading embedding model from: " << config_path
+              << std::endl;
+
+    // createEmbedding(path, load=true)
+    g_embedding_instance.reset(
+        MNN::Transformer::Embedding::createEmbedding(config_path, true));
+
+    if (!g_embedding_instance) {
+      std::cerr << "[NativeBridge] Failed to create Embedding instance."
+                << std::endl;
+      return JNI_FALSE;
+    }
+
+    // load() is usually called by createEmbedding if load=true, but let's check
+    // or we can call load() explicitly if needed. definition says "load = true"
+    // default.
+    std::cout << "[NativeBridge] Embedding model loaded." << std::endl;
+    return JNI_TRUE;
+  } catch (const std::exception &e) {
+    std::cerr << "[NativeBridge] Exception loading embedding model: "
+              << e.what() << std::endl;
+    return JNI_FALSE;
+  }
+}
+
+JNIEXPORT jboolean JNICALL
+Java_com_tactorder_gateway_native_NativeEngine_unloadEmbeddingModel(
+    JNIEnv *env, jobject thiz) {
+  try {
+    if (g_embedding_instance) {
+      g_embedding_instance.reset();
+      std::cout << "[NativeBridge] Embedding model unloaded." << std::endl;
+      return JNI_TRUE;
+    }
+    return JNI_FALSE;
+  } catch (...) {
+    return JNI_FALSE;
+  }
+}
+
+JNIEXPORT jfloatArray JNICALL
+Java_com_tactorder_gateway_native_NativeEngine_embed(JNIEnv *env, jobject thiz,
+                                                     jstring input) {
+  if (!g_embedding_instance) {
+    return nullptr;
+  }
+
+  const char *input_cstr = env->GetStringUTFChars(input, nullptr);
+  if (!input_cstr)
+    return nullptr;
+
+  std::string input_str(input_cstr);
+  env->ReleaseStringUTFChars(input, input_cstr);
+
+  try {
+    // Generate embedding
+    // txt_embedding returns a VARP (Variable)
+    auto var = g_embedding_instance->txt_embedding(input_str);
+
+    if (var == nullptr) {
+      std::cerr << "[NativeBridge] txt_embedding returned null VARP"
+                << std::endl;
+      return nullptr;
+    }
+
+    // Read data from VARP
+    // We assume it returns a 1D or 2D tensor. For a single string, likely [1,
+    // dim] or [dim].
+    auto info = var->getInfo();
+    if (!info) {
+      // Need to ensure it's computed? VARP usually is lazy?
+      // txt_embedding implementation usually runs forward.
+      // Let's read it safely.
+    }
+
+    // readMap() ensures content is available on host
+    const float *ptr = var->readMap<float>();
+    if (!ptr) {
+      std::cerr << "[NativeBridge] Failed to read embedding data" << std::endl;
+      return nullptr;
+    }
+
+    int size = info->size;
+
+    jfloatArray result = env->NewFloatArray(size);
+    if (result == nullptr)
+      return nullptr;
+
+    env->SetFloatArrayRegion(result, 0, size, ptr);
+
+    return result;
+  } catch (const std::exception &e) {
+    std::cerr << "[NativeBridge] Embedding error: " << e.what() << std::endl;
+    return nullptr;
+  }
+}
+
+} // extern "C"
