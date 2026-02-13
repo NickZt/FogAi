@@ -80,7 +80,7 @@ tasks.register<Exec>("compileJni") {
     dependsOn("cmakeConfig")
     workingDir(buildDir)
     // Run cmake and make. Re-running make is fast if nothing changed.
-    commandLine("sh", "-c", "cmake .. -DMNN_BUILD_LLM=ON -DMNN_AVX512=ON && make -j8")
+    commandLine("sh", "-c", "cmake .. -DMNN_BUILD_LLM=ON -DMNN_AVX512=ON -DMNN_IMGCODECS=ON && make -j8")
 }
 
 tasks.register<Copy>("copyJniLib") {

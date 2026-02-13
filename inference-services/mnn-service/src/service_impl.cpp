@@ -123,8 +123,30 @@ InferenceServiceImpl::GetOrLoadModel(const std::string &model_id) {
 
   // Load
   std::string config_path = path_it->second;
+
+  auto get_mem_available = []() -> float {
+    FILE *fp = fopen("/proc/meminfo", "r");
+    if (!fp)
+      return -1.0f;
+    char line[256];
+    float mem_avail = -1.0f;
+    while (fgets(line, sizeof(line), fp)) {
+      if (sscanf(line, "MemAvailable: %f kB", &mem_avail) == 1) {
+        mem_avail /= 1024.0f; // MB
+        break;
+      }
+    }
+    fclose(fp);
+    return mem_avail;
+  };
+
+  float mem_before = get_mem_available();
   std::cout << "[System] Loading model: " << model_id << " from " << config_path
             << " ..." << std::endl;
+  if (mem_before > 0)
+    std::cout << "[System] MemAvailable Before: " << mem_before << " MB"
+              << std::endl;
+
   auto start_time = std::chrono::high_resolution_clock::now();
 
   try {
@@ -141,8 +163,14 @@ InferenceServiceImpl::GetOrLoadModel(const std::string &model_id) {
     auto end_time = std::chrono::high_resolution_clock::now();
     auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(
         end_time - start_time);
+
+    float mem_after = get_mem_available();
     std::cout << "[System] Model loaded successfully in " << duration.count()
               << " ms." << std::endl;
+    if (mem_after > 0)
+      std::cout << "[System] MemAvailable After: " << mem_after
+                << " MB (Diff: " << (mem_before - mem_after) << " MB)"
+                << std::endl;
 
     loaded_models_[model_id] = std::move(new_llm);
     return loaded_models_[model_id].get();

@@ -27,8 +27,29 @@ Java_com_tactorder_gateway_native_NativeEngine_loadModel(JNIEnv *env,
       g_llm_instance.reset();
     }
 
+    auto get_mem_available = []() -> float {
+      FILE *fp = fopen("/proc/meminfo", "r");
+      if (!fp)
+        return -1.0f;
+      char line[256];
+      float mem_avail = -1.0f;
+      while (fgets(line, sizeof(line), fp)) {
+        if (sscanf(line, "MemAvailable: %f kB", &mem_avail) == 1) {
+          mem_avail /= 1024.0f; // MB
+          break;
+        }
+      }
+      fclose(fp);
+      return mem_avail;
+    };
+
+    float mem_before = get_mem_available();
     std::cout << "[NativeBridge] Loading model from: " << config_path
               << std::endl;
+    if (mem_before > 0)
+      std::cout << "[NativeBridge] MemAvailable Before: " << mem_before << " MB"
+                << std::endl;
+
     g_llm_instance.reset(MNN::Transformer::Llm::createLLM(config_path.c_str()));
 
     if (!g_llm_instance) {
@@ -37,7 +58,14 @@ Java_com_tactorder_gateway_native_NativeEngine_loadModel(JNIEnv *env,
     }
 
     g_llm_instance->load();
+
+    float mem_after = get_mem_available();
     std::cout << "[NativeBridge] Model loaded successfully." << std::endl;
+    if (mem_after > 0)
+      std::cout << "[NativeBridge] MemAvailable After: " << mem_after
+                << " MB (Diff: " << (mem_before - mem_after) << " MB)"
+                << std::endl;
+
     return JNI_TRUE;
   } catch (const std::exception &e) {
     std::cerr << "[NativeBridge] Exception loading model: " << e.what()

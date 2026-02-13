@@ -45,8 +45,30 @@ object NativeEngine {
     ): Int
 
     /**
+     * Interface for receiving streamed tokens from the native engine.
+     */
+    fun interface TokenCallback {
+        /**
+         * Called when a new token chunk is generated.
+         * @param token The generated text chunk.
+         * @return true to continue generation, false to stop.
+         */
+        fun onToken(token: String): Boolean
+    }
+
+    /**
      * Convenience method for simple string-based generation (Testing/Debugging).
      * Not zero-copy.
      */
     external fun generateString(prompt: String): String
+
+    /**
+     * Stream-based generation.
+     * Calls callback.onToken() for each generated chunk.
+     *
+     * @param prompt The input prompt.
+     * @param callback The callback to receive tokens.
+     * @return The full generated string (aggregated).
+     */
+    external fun generateStringStream(prompt: String, callback: TokenCallback): String
 }
