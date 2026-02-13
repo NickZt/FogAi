@@ -37,6 +37,7 @@ private:
   ServerWriter<ChatResponse> *writer_;
   std::string model_id_;
   std::string buffer_;
+  int token_count_ = 0;
 };
 
 class InferenceServiceImpl final : public InferenceService::Service {

@@ -4,9 +4,6 @@ project(mnn-inference-service CXX)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-# Conan integration (handled via CMAKE_TOOLCHAIN_FILE)
-# No need for conanbuildinfo.cmake in Conan 2.0 with CMakeToolchain
-
 # Find Protobuf and gRPC
 find_package(Protobuf REQUIRED)
 find_package(gRPC REQUIRED)
@@ -16,33 +13,33 @@ include(FetchContent)
 # --- MNN Dependency (Submodule) ---
 set(MNN_BUILD_LLM ON CACHE BOOL "Enable MNN LLM" FORCE)
 set(MNN_OPENMP OFF CACHE BOOL "Disable OpenMP" FORCE)
-set(MNN_AVX512 OFF CACHE BOOL "Disable AVX512 for stability" FORCE)
+set(MNN_AVX512 ON CACHE BOOL "Enable AVX512 for performance" FORCE)
 set(MNN_USE_THREAD_POOL ON CACHE BOOL "Use ThreadPool" FORCE)
 
 # Check if submodule exists
-message(STATUS "Checking for submodule at: ${CMAKE_CURRENT_SOURCE_DIRECTORY}/MNN/CMakeLists.txt")
-if(NOT EXISTS "${CMAKE_CURRENT_SOURCE_DIRECTORY}/MNN/CMakeLists.txt")
+message(STATUS "Checking for submodule at: ${CMAKE_CURRENT_SOURCE_DIR}/MNN/CMakeLists.txt")
+if(NOT EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/MNN/CMakeLists.txt")
     message(WARNING "MNN submodule not found via check! But proceeding to try add_subdirectory...")
-    # message(FATAL_ERROR "MNN submodule not found! Run 'git submodule update --init --recursive'")
 endif()
 
 add_subdirectory(MNN)
 
 include_directories(
-    ${CMAKE_CURRENT_SOURCE_DIRECTORY}/MNN/include
-    ${CMAKE_CURRENT_SOURCE_DIRECTORY}/MNN/transformers/llm/engine/include
-    ${CMAKE_CURRENT_SOURCE_DIRECTORY}/src
+    ${CMAKE_CURRENT_SOURCE_DIR}/MNN/include
+    ${CMAKE_CURRENT_SOURCE_DIR}/MNN/transformers/llm/engine/include
+    ${CMAKE_CURRENT_SOURCE_DIR}/src
 )
 
-# FetchContent_MakeAvailable(MNN) - REMOVED
-
-# Fetch nlohmann/json
+# Fetch nlohmann/json (Header Only)
 FetchContent_Declare(
     json
     GIT_REPOSITORY https://github.com/nlohmann/json.git
     GIT_TAG        v3.11.2
 )
-FetchContent_MakeAvailable(json)
+FetchContent_GetProperties(json)
+if(NOT json_POPULATED)
+    FetchContent_Populate(json)
+endif()
 
 # Proto file generation
 set(PROTO_SRC_DIR "${CMAKE_SOURCE_DIR}/../../proto")
@@ -79,10 +76,11 @@ target_include_directories(inference_proto PUBLIC "${PROTO_GEN_DIR}")
 
 # Main executable
 add_executable(mnn-service src/main.cpp src/service_impl.cpp)
-# Link MNN, MNN_Express, and llm libraries
-# Link MNN, MNN_Express, and llm libraries
-# Link MNN, MNN_Express, and llm libraries
-# Link MNN, MNN_Express, llm, and json libraries
-target_link_libraries(mnn-service PRIVATE inference_proto MNN MNN_Express llm nlohmann_json::nlohmann_json)
+# Link MNN, MNN_Express, llm, and proto
+target_link_libraries(mnn-service PRIVATE inference_proto MNN MNN_Express llm)
 message(STATUS "Including MNN headers from: ${CMAKE_CURRENT_SOURCE_DIR}/MNN/include")
-target_include_directories(mnn-service PUBLIC src "${CMAKE_CURRENT_SOURCE_DIR}/MNN/include" "${CMAKE_CURRENT_SOURCE_DIR}/MNN/transformers/llm/engine/include")
+target_include_directories(mnn-service PUBLIC src 
+    "${CMAKE_CURRENT_SOURCE_DIR}/MNN/include" 
+    "${CMAKE_CURRENT_SOURCE_DIR}/MNN/transformers/llm/engine/include"
+    "${json_SOURCE_DIR}/include"
+)

@@ -30,6 +30,12 @@ void GrpcStreamBuf::flush_buffer() {
   if (buffer_.empty())
     return;
 
+  // Log progress every ~10 tokens/chunks to show activity without flooding
+  token_count_++;
+  if (token_count_ % 5 == 0) {
+    std::cout << "." << std::flush;
+  }
+
   ChatResponse response;
   response.set_id("chatcmpl-" + model_id_);
   response.set_created(time(nullptr));
@@ -104,43 +110,46 @@ InferenceServiceImpl::GetOrLoadModel(const std::string &model_id) {
   // Check if available
   auto path_it = available_models_.find(model_id);
   if (path_it == available_models_.end()) {
-    // Fallback: If scanned list is empty or ID matches none,
-    // checking if maybe we only have one model and request used weird ID?
-    // But stricter is better.
     std::cerr << "Model ID not found: " << model_id << std::endl;
     return nullptr;
   }
 
+  // Single Active Model Policy: Unload others
+  if (!loaded_models_.empty()) {
+    std::cout << "[System] Unloading previous models to free memory..."
+              << std::endl;
+    loaded_models_.clear();
+  }
+
   // Load
   std::string config_path = path_it->second;
-  std::cout << "Loading model: " << model_id << " from " << config_path
-            << std::endl;
+  std::cout << "[System] Loading model: " << model_id << " from " << config_path
+            << " ..." << std::endl;
+  auto start_time = std::chrono::high_resolution_clock::now();
 
   try {
-    // Load MNN LLM
-    // Note: MNN::Express::Executor::RuntimeManager logic is hidden inside
-    // Llm::createLLM If we need custom external file mapping (like we did in
-    // previous service_impl.cpp attempts), we assume createLLM handles it or
-    // the config.json handles it. Actually, previous attempts showed createLLM
-    // handles it IF config.json is correct.
-
     std::unique_ptr<MNN::Transformer::Llm> new_llm(
         MNN::Transformer::Llm::createLLM(config_path.c_str()));
 
     if (!new_llm) {
-      std::cerr << "Failed to create LLM for " << model_id << std::endl;
+      std::cerr << "[Error] Failed to create LLM for " << model_id << std::endl;
       return nullptr;
     }
 
     new_llm->load();
 
-    // Emplace
+    auto end_time = std::chrono::high_resolution_clock::now();
+    auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(
+        end_time - start_time);
+    std::cout << "[System] Model loaded successfully in " << duration.count()
+              << " ms." << std::endl;
+
     loaded_models_[model_id] = std::move(new_llm);
     return loaded_models_[model_id].get();
 
   } catch (const std::exception &e) {
-    std::cerr << "Exception loading model " << model_id << ": " << e.what()
-              << std::endl;
+    std::cerr << "[Error] Exception loading model " << model_id << ": "
+              << e.what() << std::endl;
     return nullptr;
   }
 }
@@ -233,14 +242,34 @@ InferenceServiceImpl::ChatCompletion(ServerContext *context,
   GrpcStreamBuf stream_buf(writer, model_id);
   std::ostream os(&stream_buf);
 
+  std::cout << "[System] Starting generation..." << std::flush;
   try {
     llm->response(prompt_items, &os);
   } catch (const std::exception &e) {
-    std::cerr << "Error during inference: " << e.what() << std::endl;
+    std::cerr << "\n[Error] Error during inference: " << e.what() << std::endl;
     return Status(grpc::INTERNAL, "Inference failed: " + std::string(e.what()));
   }
 
   os.flush();
+  os.flush();
+  std::cout << "\n[System] Generation finished." << std::endl;
+
+  // Log Metrics
+  auto llm_context = llm->getContext();
+  if (llm_context) {
+    double prefill_ms = llm_context->prefill_us / 1000.0;
+    double decode_ms = llm_context->decode_us / 1000.0;
+    double speed = 0.0;
+    if (llm_context->decode_us > 0) {
+      speed = llm_context->gen_seq_len / (llm_context->decode_us / 1000000.0);
+    }
+    std::cout << "[Metrics] Prompt Tokens: " << llm_context->prompt_len << "\n"
+              << "[Metrics] Generated Tokens: " << llm_context->gen_seq_len
+              << "\n"
+              << "[Metrics] Prefill Time: " << prefill_ms << " ms\n"
+              << "[Metrics] Decode Time: " << decode_ms << " ms\n"
+              << "[Metrics] Speed: " << speed << " tokens/sec" << std::endl;
+  }
 
   ChatResponse final_response;
   final_response.set_id("chatcmpl-" + model_id);

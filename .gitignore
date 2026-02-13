@@ -3,3 +3,10 @@ gateway/.gradle/*
 inference-services/mnn-service/build/*
 /.idea/
 /inference-services/mnn-service/.idea/
+/inference-services/mnn-service/CMakeFiles/
+/inference-services/mnn-service/_deps/
+/inference-services/mnn-service/generated/
+/inference-services/mnn-service/.cmake/
+/inference-services/mnn-service/.cache/
+/inference-services/mnn-service/CMakeCache.txt
+/inference-services/mnn-service/Testing/Temporary/
