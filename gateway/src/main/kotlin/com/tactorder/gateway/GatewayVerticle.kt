@@ -33,6 +33,7 @@ class GatewayVerticle : CoroutineVerticle() {
         
         val embeddingsHandler = com.tactorder.gateway.api.EmbeddingsHandler(gatewayRouterAi)
         router.post("/v1/embeddings").handler(embeddingsHandler::handle)
+
         
         // Health check
         router.get("/health").handler { ctx -> ctx.json(mapOf("status" to "ok")) }

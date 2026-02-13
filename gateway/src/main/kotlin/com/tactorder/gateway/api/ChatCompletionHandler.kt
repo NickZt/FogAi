@@ -29,6 +29,52 @@ class ChatCompletionHandler(private val routerAi: RouterAi) {
 
         logger.info("Received request for model: ${request.model}")
 
+        // Native Engine Handling
+        if (request.model.startsWith("native-")) {
+            val modelId = request.model.removePrefix("native-")
+            // For now, mapping ID to a known path or assuming standard location
+            // This is a test harness. In production, we'd look up the path from a registry.
+            // Assuming Qwen2.5-0.5B-Instruct if ID matches or default
+            val modelPath = "/home/nickzt/Projects/LLM_campf/models_mnn/qwen2-0.5b-instruct/config.json"
+            
+            logger.info("Routing to Native Engine. Model: $modelId Path: $modelPath")
+            
+            val scope = CoroutineScope(ctx.vertx().dispatcher())
+            scope.launch {
+                try {
+                     // Load if needed (simple check)
+                    com.tactorder.gateway.native.NativeEngine.loadModel(modelPath)
+                    
+                    // Simple synchronous generation
+                    val prompt = request.messages.lastOrNull()?.content?.toString() ?: ""
+                    val result = com.tactorder.gateway.native.NativeEngine.generateString(prompt)
+                    
+                    val response = ChatCompletionResponse(
+                        id = "native-" + UUID.randomUUID().toString(),
+                        created = System.currentTimeMillis() / 1000,
+                        model = request.model,
+                        choices = listOf(
+                            com.tactorder.gateway.model.ChatChoice(
+                                index = 0,
+                                message = com.tactorder.gateway.model.ChatMessage(
+                                    role = "assistant",
+                                    content = result
+                                ),
+                                delta = null,
+                                finishReason = "stop"
+                            )
+                        ),
+                        usage = Usage(0, 0, 0)
+                    )
+                    ctx.json(response)
+                } catch(e: Exception) {
+                    logger.error("Native inference failed", e)
+                    ctx.fail(500, e)
+                }
+            }
+            return
+        }
+
         val client = routerAi.getClientForModel(request.model)
         if (client == null) {
             ctx.response().setStatusCode(404).end("Model not found")

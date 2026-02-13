@@ -62,6 +62,38 @@ sourceSets {
     }
 }
 
+tasks.withType<JavaExec> {
+    systemProperty("java.library.path", file("libs").absolutePath)
+}
+
+val cmakeDir = file("../inference-services/mnn-service")
+val buildDir = file("../inference-services/mnn-service/build")
+val libDir = file("libs")
+val libName = "libmnn_bridge.so"
+
+tasks.register<Exec>("cmakeConfig") {
+    workingDir(cmakeDir)
+    commandLine("mkdir", "-p", "build")
+}
+
+tasks.register<Exec>("compileJni") {
+    dependsOn("cmakeConfig")
+    workingDir(buildDir)
+    // Run cmake and make. Re-running make is fast if nothing changed.
+    commandLine("sh", "-c", "cmake .. -DMNN_BUILD_LLM=ON -DMNN_AVX512=ON && make -j8")
+}
+
+tasks.register<Copy>("copyJniLib") {
+    dependsOn("compileJni")
+    from(buildDir.resolve(libName))
+    into(libDir)
+}
+
+// Ensure the library is built and copied before processing resources or running
+tasks.named("processResources") {
+    dependsOn("copyJniLib")
+}
+
 protobuf {
     protoc {
         artifact = "com.google.protobuf:protoc:$protobufVersion"

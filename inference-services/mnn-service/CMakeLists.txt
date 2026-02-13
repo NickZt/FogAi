@@ -74,6 +74,21 @@ add_library(inference_proto
 target_link_libraries(inference_proto PUBLIC protobuf::libprotobuf gRPC::grpc++)
 target_include_directories(inference_proto PUBLIC "${PROTO_GEN_DIR}")
 
+
+# --- JNI Bridge Library ---
+find_package(JNI REQUIRED)
+
+add_library(mnn_bridge SHARED src/mnn_bridge.cpp)
+
+# Link MNN, MNN_Express, llm, and JNI
+target_link_libraries(mnn_bridge PRIVATE MNN MNN_Express llm JNI::JNI)
+
+target_include_directories(mnn_bridge PRIVATE 
+    "${CMAKE_CURRENT_SOURCE_DIR}/MNN/include" 
+    "${CMAKE_CURRENT_SOURCE_DIR}/MNN/transformers/llm/engine/include"
+    "${JNI_INCLUDE_DIRS}"
+)
+
 # Main executable
 add_executable(mnn-service src/main.cpp src/service_impl.cpp)
 # Link MNN, MNN_Express, llm, and proto

@@ -12,9 +12,26 @@ class ModelsHandler(private val routerAi: RouterAi) {
         scope.launch {
             try {
                 val models = routerAi.listModels()
+                val nativeModels = models.map { 
+                    it.toBuilder()
+                        .setId("native-" + it.id)
+                        .setObject("model (native)")
+                        .build() 
+                }
+                
+                // Convert to Map for JSON serialization (Jackson doesn't handle Proto well by default)
+                val responseList = (models + nativeModels).map {
+                    mapOf(
+                        "id" to it.id,
+                        "object" to it.`object`,
+                        "created" to it.created,
+                        "owned_by" to it.ownedBy
+                    )
+                }
+
                 ctx.json(mapOf(
                     "object" to "list",
-                    "data" to models
+                    "data" to responseList
                 ))
             } catch (e: Exception) {
                 e.printStackTrace()
