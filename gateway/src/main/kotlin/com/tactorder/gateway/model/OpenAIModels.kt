@@ -3,7 +3,10 @@ package com.tactorder.gateway.model
 import com.fasterxml.jackson.annotation.JsonInclude
 import com.fasterxml.jackson.annotation.JsonProperty
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties
+
 @JsonInclude(JsonInclude.Include.NON_NULL)
+@JsonIgnoreProperties(ignoreUnknown = true)
 data class ChatCompletionRequest(
     val model: String,
     val messages: List<ChatMessage>,
