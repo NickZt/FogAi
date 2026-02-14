@@ -50,6 +50,7 @@ add_library(inference_common STATIC
     "${PROTO_GEN_DIR}/inference.grpc.pb.cc"
     "${PROTO_GEN_DIR}/inference.grpc.pb.h"
     src/server_base.cpp
+    src/tokenizer.cpp
     # src/grpc_stream_buf.cpp # If we split implementation
 )
 
@@ -63,3 +64,6 @@ target_include_directories(inference_common PUBLIC
     include
     "${PROTO_GEN_DIR}"
 )
+
+add_executable(test_tokenizer src/test_tokenizer.cpp)
+target_link_libraries(test_tokenizer PRIVATE inference_common)

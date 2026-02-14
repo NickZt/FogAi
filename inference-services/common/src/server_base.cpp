@@ -78,6 +78,7 @@ Status ServerBase::ChatCompletion(ServerContext *context,
                                   const ChatRequest *request,
                                   ServerWriter<ChatResponse> *writer) {
   std::string model_id = request->model_id();
+  std::cerr << "Entering ChatCompletion for model: " << model_id << std::endl;
   std::cout << "Received request for model: " << model_id << std::endl;
 
   // Validate model existence
