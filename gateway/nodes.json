@@ -10,7 +10,14 @@
             "type": "grpc",
             "host": "localhost",
             "port": 50051,
-            "prefix": "remote-"
+            "prefix": "mnngrpc"
+        },
+        {
+            "id": "onnx-service-01",
+            "type": "grpc",
+            "host": "localhost",
+            "port": 50052,
+            "prefix": "onnxgrpc"
         }
     ]
 }
