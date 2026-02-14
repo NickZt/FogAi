@@ -11,21 +11,15 @@ class ModelsHandler(private val routerAi: RouterAi) {
         val scope = CoroutineScope(ctx.vertx().dispatcher())
         scope.launch {
             try {
-                val models = routerAi.listModels()
-                val nativeModels = models.map { 
-                    it.toBuilder()
-                        .setId("native-" + it.id)
-                        .setObject("model (native)")
-                        .build() 
-                }
+                // Returns List<String> now
+                val modelIds = routerAi.listModels()
                 
-                // Convert to Map for JSON serialization (Jackson doesn't handle Proto well by default)
-                val responseList = (models + nativeModels).map {
+                val responseList = modelIds.map { id ->
                     mapOf(
-                        "id" to it.id,
-                        "object" to it.`object`,
-                        "created" to it.created,
-                        "owned_by" to it.ownedBy
+                        "id" to id,
+                        "object" to "model",
+                        "created" to System.currentTimeMillis() / 1000,
+                        "owned_by" to "mnn-gateway"
                     )
                 }
 

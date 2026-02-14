@@ -75,5 +75,5 @@ object NativeEngine {
     // Embedding methods
     external fun loadEmbeddingModel(modelPath: String): Boolean
     external fun unloadEmbeddingModel(): Boolean
-    external fun embed(input: String): FloatArray
+    external fun embed(input: String): FloatArray?
 }

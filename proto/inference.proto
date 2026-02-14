@@ -71,10 +71,7 @@ message Delta {
 
 message EmbeddingRequest {
   string model_id = 1;
-  oneof input {
-    string text = 2;
-    // repeated string tokens = 3; // Future support for pre-tokenized input
-  }
+  repeated string input = 2; // Supports batch input
 }
 
 message EmbeddingResponse {
