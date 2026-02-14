@@ -3,6 +3,9 @@ package com.tactorder.gateway.api
 import com.tactorder.gateway.application.ChatService
 import com.tactorder.gateway.domain.model.ChatRequest
 import com.tactorder.gateway.domain.model.ChatMessage
+import com.tactorder.gateway.domain.model.ChatResponse
+import com.tactorder.gateway.domain.model.ChatChoice
+import com.tactorder.gateway.domain.model.Usage
 import io.vertx.core.json.Json
 import io.vertx.core.json.JsonObject
 import io.vertx.ext.web.RoutingContext
@@ -49,12 +52,55 @@ class ChatCompletionHandler(private val chatService: ChatService) {
                     ctx.response().end()
                 } else {
                     val responses = chatService.chatCompletion(request).toList()
-                    // Aggregate or single response (if Service returns single for non-stream)
-                    // The MnnJniService returns single item for non-stream.
-                    // GrpcService returns single item usually if upstream behaves so.
                     
                     if (responses.isNotEmpty()) {
-                        ctx.json(responses.last()) // Assuming last has full content or we aggregate
+                        // Check if we need to aggregate (if first response has delta, it's a stream chunk)
+                        val first = responses.first()
+                        val isStreamChunks = first.choices?.firstOrNull()?.delta != null
+                        
+                        if (isStreamChunks) {
+                            // Aggregate chunks
+                            val fullContent = StringBuilder()
+                            var role = "assistant" // Default
+                            var finishReason: String? = null
+                            
+                            // Use first chunk for metadata
+                            val template = first
+                            
+                            responses.forEach { resp ->
+                                resp.choices.forEach { choice ->
+                                    choice.delta?.content?.let { fullContent.append(it) }
+                                    choice.delta?.role?.takeIf { it.isNotEmpty() }?.let { role = it }
+                                    // Update finish reason if present
+                                    if (choice.finishReason != null) {
+                                        finishReason = choice.finishReason
+                                    }
+                                }
+                            }
+                            
+                            // Construct complete structure
+                            val completeMessage = ChatMessage(role = role, content = fullContent.toString())
+                            
+                            val aggregatedChoice = ChatChoice(
+                                index = 0,
+                                message = completeMessage,
+                                delta = null,
+                                finishReason = finishReason
+                            )
+                            
+                            val aggregatedResponse = ChatResponse(
+                                id = template.id,
+                                created = template.created,
+                                model = template.model,
+                                choices = listOf(aggregatedChoice),
+                                usage = responses.last().usage // Best effort usage
+                            )
+                            
+                            ctx.json(aggregatedResponse)
+                        } else {
+                            // Already a single complete response (like MNN JNI might be)
+                            ctx.json(responses.last())
+                        }
                     } else {
                         ctx.fail(500)
                     }

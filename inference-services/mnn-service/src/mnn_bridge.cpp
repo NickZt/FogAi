@@ -159,6 +159,116 @@ Java_com_tactorder_gateway_native_NativeEngine_generateString(JNIEnv *env,
   }
 }
 
+// Custom StreamBuf to intercept output and call Java callback
+class CallbackStreamBuf : public std::streambuf {
+public:
+  CallbackStreamBuf(JNIEnv *env, jobject callback, jmethodID onTokenMethod)
+      : env_(env), callback_(callback), onTokenMethod_(onTokenMethod) {}
+
+protected:
+  // Called when the buffer is full or flushed
+  virtual int_type overflow(int_type c) override {
+    if (c != EOF) {
+      char ch = static_cast<char>(c);
+      buffer_ += ch;
+    }
+    return c;
+  }
+
+  // Called on std::flush or endl
+  virtual int sync() override {
+    if (!buffer_.empty()) {
+      jstring jchunk = env_->NewStringUTF(buffer_.c_str());
+      // Check for error in creation
+      if (jchunk) {
+        jboolean continueGen =
+            env_->CallBooleanMethod(callback_, onTokenMethod_, jchunk);
+        env_->DeleteLocalRef(jchunk);
+
+        // TODO: Handle continueGen == false to stop generation
+        // MNN LLM doesn't easily support external stop signal via stream,
+        // passing continueGen back is tricky without modifying MNN.
+      }
+      full_response_ += buffer_;
+      buffer_.clear();
+    }
+    return 0;
+  }
+
+public:
+  std::string getFullResponse() const { return full_response_; }
+
+private:
+  JNIEnv *env_;
+  jobject callback_;
+  jmethodID onTokenMethod_;
+  std::string buffer_;
+  std::string full_response_;
+};
+
+JNIEXPORT jstring JNICALL
+Java_com_tactorder_gateway_native_NativeEngine_generateStringStream(
+    JNIEnv *env, jobject thiz, jstring prompt, jobject callback) {
+  if (!g_llm_instance)
+    return env->NewStringUTF("Error: Model not loaded");
+
+  const char *prompt_cstr = env->GetStringUTFChars(prompt, nullptr);
+  if (!prompt_cstr)
+    return nullptr;
+  std::string prompt_str(prompt_cstr);
+  env->ReleaseStringUTFChars(prompt, prompt_cstr);
+
+  // Trace Logging
+  std::cout << "[NativeBridge] [TRACE] Input Type: Text" << std::endl;
+  std::cout << "[NativeBridge] [TRACE] Processing Prompt: " << prompt_str
+            << std::endl;
+
+  // Get callback method ID
+  jclass callbackClass = env->GetObjectClass(callback);
+  jmethodID onToken =
+      env->GetMethodID(callbackClass, "onToken", "(Ljava/lang/String;)Z");
+  if (!onToken) {
+    return env->NewStringUTF("Error: Method onToken not found");
+  }
+
+  try {
+    CallbackStreamBuf buf(env, callback, onToken);
+    std::ostream os(&buf);
+
+    g_llm_instance->response(prompt_str, &os);
+    os.flush(); // Ensure last bit is sent
+
+    // Log Performance Metrics
+    auto context = g_llm_instance->getContext();
+    if (context) {
+      int prompt_tokens = context->prompt_len;
+      int generated_tokens = context->gen_seq_len;
+      float prefill_time = context->prefill_us / 1000.0f; // ms
+      float decode_time = context->decode_us / 1000.0f;   // ms
+      float total_time = prefill_time + decode_time;
+      float speed = 0.0f;
+      if (decode_time > 0) {
+        speed = generated_tokens / (decode_time / 1000.0f);
+      }
+
+      std::cout << "[Metrics] Prompt Tokens: " << prompt_tokens << std::endl;
+      std::cout << "[Metrics] Generated Tokens: " << generated_tokens
+                << std::endl;
+      std::cout << "[Metrics] Prefill Time: " << prefill_time << " ms"
+                << std::endl;
+      std::cout << "[Metrics] Decode Time: " << decode_time << " ms"
+                << std::endl;
+      std::cout << "[Metrics] Speed: " << speed << " tokens/sec" << std::endl;
+    }
+
+    return env->NewStringUTF(buf.getFullResponse().c_str());
+  } catch (const std::exception &e) {
+    std::string err = "Error: ";
+    err += e.what();
+    return env->NewStringUTF(err.c_str());
+  }
+}
+
 } // extern "C"
 
 // ----------------------------------------------------------------------------

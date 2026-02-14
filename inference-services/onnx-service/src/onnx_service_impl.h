@@ -3,9 +3,13 @@
 
 #include "tactorder/inference/server_base.h"
 #include "tactorder/inference/tokenizer.hpp"
+#include <algorithm>
+#include <array>
+#include <cstdint>
 #include <map>
 #include <memory>
 #include <onnxruntime_cxx_api.h>
+#include <vector>
 
 namespace tactorder {
 namespace inference {

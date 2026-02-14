@@ -167,13 +167,13 @@ void InferenceServiceImpl::GenerateStream(
   std::vector<std::pair<std::string, std::string>> processed_messages;
 
   for (const auto &item : messages) {
-    std::string user_content = item.first;
-    std::string assistant_content = item.second;
+    std::string role = item.first;
+    std::string content = item.second;
 
     // JSON Vision Hack
-    if (!user_content.empty() && user_content.front() == '[') {
+    if (role == "user" && !content.empty() && content.front() == '[') {
       try {
-        auto j = json::parse(user_content);
+        auto j = json::parse(content);
         if (j.is_array()) {
           std::string combined_text;
           for (const auto &item : j) {
@@ -188,17 +188,22 @@ void InferenceServiceImpl::GenerateStream(
               }
             }
           }
-          user_content = combined_text;
+          content = combined_text;
         }
       } catch (json::parse_error &) {
         // Ignore
       }
     }
-    processed_messages.emplace_back(user_content, assistant_content);
+    processed_messages.emplace_back(role, content);
   }
 
   std::cout << "[System] Starting generation..." << std::flush;
-  llm->response(processed_messages, os);
+  // Use string-based response to match JNI stability
+  std::string prompt = llm->apply_chat_template(processed_messages);
+  std::cout << "[System] Prompt: "
+            << prompt.substr(0, std::min(prompt.length(), (size_t)200)) << "..."
+            << std::endl;
+  llm->response(prompt, os);
   std::cout << "\n[System] Generation finished." << std::endl;
 
   // Log Metrics

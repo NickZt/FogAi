@@ -108,14 +108,7 @@ Status ServerBase::ChatCompletion(ServerContext *context,
 
     std::string role = msg.role();
     std::string content = msg.content();
-
-    if (role == "user") {
-      prompt_items.emplace_back(content, "");
-    } else if (role == "assistant") {
-      if (!prompt_items.empty()) {
-        prompt_items.back().second = content;
-      }
-    }
+    prompt_items.emplace_back(role, content);
   }
 
   GrpcStreamBuf stream_buf(writer, model_id);

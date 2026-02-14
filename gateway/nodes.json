@@ -13,11 +13,11 @@
             "prefix": "mnngrpc"
         },
         {
-            "id": "onnx-service-01",
+            "id": "onnx-service",
             "type": "grpc",
             "host": "localhost",
             "port": 50052,
-            "prefix": "onnxgrpc"
+            "prefix": "onnx-"
         }
     ]
 }
