@@ -10,12 +10,22 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 
 class GrpcInferenceService(
-    private val client: InferenceClient
+    private val client: InferenceClient,
+    private val modelPrefix: String = ""
 ) : InferenceService {
 
+    private fun stripPrefix(modelId: String): String {
+        return if (modelPrefix.isNotEmpty() && modelId.startsWith(modelPrefix)) {
+            modelId.removePrefix(modelPrefix)
+        } else {
+            modelId
+        }
+    }
+
     override fun chatCompletion(request: ChatRequest): Flow<ChatResponse> {
+        val targetModelId = stripPrefix(request.model)
         val protoRequest = ProtoChatRequest.newBuilder()
-            .setModelId(request.model)
+            .setModelId(targetModelId)
             .addAllMessages(request.messages.map { 
                 ProtoMessage.newBuilder()
                     .setRole(it.role)
@@ -34,7 +44,14 @@ class GrpcInferenceService(
             ChatResponse(
                 id = protoResp.id,
                 created = protoResp.created,
-                model = protoResp.model,
+                // We typically want to return the original requested model ID (with prefix) to the user
+                // so they can match request/response.
+                // However, the proto returns what the backend sent (unprefixed).
+                // We could re-attach prefix, or just pass through.
+                // For consistency with OpenAI, if user asked for "remote-foo", they expect "remote-foo".
+                // But let's verify what protoResp.model contains. It likely contains "foo".
+                // Let's prepend prefix if configured.
+                model = if (modelPrefix.isNotEmpty()) modelPrefix + protoResp.model else protoResp.model,
                 choices = listOf(
                     ChatChoice(
                         index = choice?.index ?: 0,
@@ -49,8 +66,9 @@ class GrpcInferenceService(
     }
 
     override suspend fun embeddings(request: EmbeddingRequest): EmbeddingResponse {
+        val targetModelId = stripPrefix(request.model)
         val protoReq = ProtoEmbeddingRequest.newBuilder()
-            .setModelId(request.model)
+            .setModelId(targetModelId)
             .addAllInput(request.input)
             .build()
             
@@ -65,7 +83,7 @@ class GrpcInferenceService(
                     index = it.index
                 )
             },
-            model = protoResp.model,
+            model = if (modelPrefix.isNotEmpty()) modelPrefix + protoResp.model else protoResp.model,
             usage = Usage(protoResp.usage.promptTokens, 0, protoResp.usage.totalTokens)
         )
     }

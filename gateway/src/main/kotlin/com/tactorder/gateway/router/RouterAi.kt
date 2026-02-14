@@ -108,7 +108,7 @@ class RouterAi(private val vertx: Vertx) {
             "grpc" -> {
                 if (config.host != null && config.port != null) {
                     val client = InferenceClient(vertx, config.host, config.port)
-                    val service = GrpcInferenceService(client)
+                    val service = GrpcInferenceService(client, config.prefix)
                      
                      logger.info("Registered gRPC client for node ${config.id} (prefix: ${config.prefix})")
                      if (config.prefix.isNotEmpty()) {
@@ -137,7 +137,7 @@ class RouterAi(private val vertx: Vertx) {
     
     fun registerGrpcClient(modelId: String, host: String, port: Int) {
         val client = InferenceClient(vertx, host, port)
-        val service = GrpcInferenceService(client)
+        val service = GrpcInferenceService(client, "")
         services[modelId] = service
         if (defaultService == null) defaultService = service
     }

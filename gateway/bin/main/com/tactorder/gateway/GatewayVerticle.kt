@@ -28,7 +28,8 @@ class GatewayVerticle : CoroutineVerticle() {
         val modelsHandler = com.tactorder.gateway.api.ModelsHandler(gatewayRouterAi)
         router.get("/v1/models").handler(modelsHandler::handle)
 
-        val chatHandler = ChatCompletionHandler(gatewayRouterAi)
+        val chatService = com.tactorder.gateway.application.ChatService(gatewayRouterAi)
+        val chatHandler = ChatCompletionHandler(chatService)
         router.post("/v1/chat/completions").handler(chatHandler::handle)
         
         val embeddingsHandler = com.tactorder.gateway.api.EmbeddingsHandler(gatewayRouterAi)
