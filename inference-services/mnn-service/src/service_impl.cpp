@@ -2,62 +2,22 @@
 #include <chrono>
 #include <filesystem>
 #include <iostream>
+#include <nlohmann/json.hpp>
 #include <thread>
 
-#include <nlohmann/json.hpp>
 using json = nlohmann::json;
-
 namespace fs = std::filesystem;
 
 namespace tactorder {
 namespace inference {
 
-// --- GrpcStreamBuf Implementation ---
-
-int GrpcStreamBuf::overflow(int c) {
-  if (c != EOF) {
-    buffer_ += static_cast<char>(c);
-  }
-  return c;
-}
-
-int GrpcStreamBuf::sync() {
-  flush_buffer();
-  return 0;
-}
-
-void GrpcStreamBuf::flush_buffer() {
-  if (buffer_.empty())
-    return;
-
-  // Log progress every ~10 tokens/chunks to show activity without flooding
-  token_count_++;
-  if (token_count_ % 5 == 0) {
-    std::cout << "." << std::flush;
-  }
-
-  ChatResponse response;
-  response.set_id("chatcmpl-" + model_id_);
-  response.set_created(time(nullptr));
-  response.set_model(model_id_);
-
-  auto *choice = response.add_choices();
-  choice->set_index(0);
-  auto *delta = choice->mutable_delta();
-  delta->set_content(buffer_);
-
-  writer_->Write(response);
-  buffer_.clear();
-}
-
-// --- InferenceServiceImpl Implementation ---
-
 InferenceServiceImpl::InferenceServiceImpl(const std::string &input_path,
                                            bool is_directory)
-    : input_path_(input_path), is_directory_(is_directory) {
+    : is_directory_(is_directory) {
+  models_dir_ = input_path; // Set base class member
   ScanModels();
 
-  // Auto-load if only one model is available (or passed as single file)
+  // Auto-load if only one model is available
   if (available_models_.size() == 1) {
     GetOrLoadModel(available_models_.begin()->first);
   }
@@ -66,22 +26,21 @@ InferenceServiceImpl::InferenceServiceImpl(const std::string &input_path,
 InferenceServiceImpl::~InferenceServiceImpl() = default;
 
 void InferenceServiceImpl::ScanModels() {
-  std::cout << "Scanning for models in: " << input_path_ << std::endl;
+  std::cout << "Scanning for models in: " << models_dir_ << std::endl;
   available_models_.clear();
 
   if (!is_directory_) {
-    // Single file mode (input_path is config.json)
-    // Derive ID from parent directory name
-    fs::path config_path(input_path_);
+    // Single file mode
+    fs::path config_path(models_dir_);
     std::string id = config_path.parent_path().filename().string();
-    available_models_[id] = input_path_;
-    std::cout << "Found model: " << id << " path: " << input_path_ << std::endl;
+    available_models_[id] = models_dir_;
+    std::cout << "Found model: " << id << " path: " << models_dir_ << std::endl;
     return;
   }
 
-  // Directory mode
+  // Directory mode - MNN specific check for config.json
   try {
-    for (const auto &entry : fs::directory_iterator(input_path_)) {
+    for (const auto &entry : fs::directory_iterator(models_dir_)) {
       if (entry.is_directory()) {
         fs::path config_path = entry.path() / "config.json";
         if (fs::exists(config_path)) {
@@ -101,29 +60,27 @@ MNN::Transformer::Llm *
 InferenceServiceImpl::GetOrLoadModel(const std::string &model_id) {
   std::lock_guard<std::mutex> lock(model_mutex_);
 
-  // Check if loaded
   auto it = loaded_models_.find(model_id);
   if (it != loaded_models_.end()) {
     return it->second.get();
   }
 
-  // Check if available
   auto path_it = available_models_.find(model_id);
   if (path_it == available_models_.end()) {
     std::cerr << "Model ID not found: " << model_id << std::endl;
     return nullptr;
   }
 
-  // Single Active Model Policy: Unload others
+  // Single Active Model Policy
   if (!loaded_models_.empty()) {
     std::cout << "[System] Unloading previous models to free memory..."
               << std::endl;
     loaded_models_.clear();
   }
 
-  // Load
   std::string config_path = path_it->second;
 
+  // Simple memory check
   auto get_mem_available = []() -> float {
     FILE *fp = fopen("/proc/meminfo", "r");
     if (!fp)
@@ -143,9 +100,6 @@ InferenceServiceImpl::GetOrLoadModel(const std::string &model_id) {
   float mem_before = get_mem_available();
   std::cout << "[System] Loading model: " << model_id << " from " << config_path
             << " ..." << std::endl;
-  if (mem_before > 0)
-    std::cout << "[System] MemAvailable Before: " << mem_before << " MB"
-              << std::endl;
 
   auto start_time = std::chrono::high_resolution_clock::now();
 
@@ -167,10 +121,6 @@ InferenceServiceImpl::GetOrLoadModel(const std::string &model_id) {
     float mem_after = get_mem_available();
     std::cout << "[System] Model loaded successfully in " << duration.count()
               << " ms." << std::endl;
-    if (mem_after > 0)
-      std::cout << "[System] MemAvailable After: " << mem_after
-                << " MB (Diff: " << (mem_before - mem_after) << " MB)"
-                << std::endl;
 
     loaded_models_[model_id] = std::move(new_llm);
     return loaded_models_[model_id].get();
@@ -182,51 +132,48 @@ InferenceServiceImpl::GetOrLoadModel(const std::string &model_id) {
   }
 }
 
-Status InferenceServiceImpl::ListModels(ServerContext *context,
-                                        const ListModelsRequest *request,
-                                        ListModelsResponse *response) {
-  for (const auto &kv : available_models_) {
-    auto *card = response->add_models();
-    card->set_id(kv.first);
-    card->set_object("model");
-    card->set_created(1700000000); // Placeholder
-    card->set_owned_by("tactorder");
-  }
-  return Status::OK;
-}
-
-Status
-InferenceServiceImpl::ChatCompletion(ServerContext *context,
-                                     const ChatRequest *request,
-                                     ServerWriter<ChatResponse> *writer) {
-  std::string model_id = request->model_id();
-  std::cout << "Received request for model: " << model_id << std::endl;
-
+void InferenceServiceImpl::GenerateStream(
+    const std::string &model_id,
+    const std::vector<std::pair<std::string, std::string>> &messages,
+    std::ostream *os) {
   MNN::Transformer::Llm *llm = GetOrLoadModel(model_id);
-
-  if (!llm) {
-    // Fallback: Try loading first available model if user requested something
-    // else but we only have one? No, let's keep it strict. Or maybe default if
-    // empty ID?
-    if (model_id.empty() && !available_models_.empty()) {
+  if (!llm && available_models_.size() > 0) {
+    // Fallback to first available if strictly needed, or just fail.
+    // Base logic checks existence, but GetOrLoadModel handles loading.
+    // If exact match failed, maybe we should try to load default?
+    // Let's stick to exact match.
+    if (model_id.empty()) {
       llm = GetOrLoadModel(available_models_.begin()->first);
     }
   }
 
   if (!llm) {
-    std::cerr << "Model not found or failed to load: " << model_id << std::endl;
-    return Status(grpc::INTERNAL, "Model not loaded: " + model_id);
+    throw std::runtime_error("Model not loaded: " + model_id);
   }
 
-  std::vector<std::pair<std::string, std::string>> prompt_items;
-  for (const auto &msg : request->messages()) {
-    std::string role = msg.role();
-    std::string content = msg.content();
+  // Process messages specifically for MNN (e.g. image parsing)
+  // The messages passed here are already separated by role, but we might need
+  // to do the JSON parsing for "content" if it's multimodal.
+  // The previous implementation did this parsing on the request->messages()
+  // loop. Here we have vector<pair<string, string>>. The first string is User
+  // Content (or JSON), the second is Assistant Content.
 
-    // Attempt to parse if looks like JSON array
-    if (!content.empty() && content.front() == '[') {
+  // We need to reconstruct this logic.
+  // BUT! MNN::Transformer::Llm::response takes `vector<pair<string, string>>`.
+  // It expects the content to be processed? OR does it handle vision tags?
+  // The previous code MANUALLY parsed JSON to extract image URLs and append
+  // tags. So we MUST process the messages here before passing to llm->response.
+
+  std::vector<std::pair<std::string, std::string>> processed_messages;
+
+  for (const auto &item : messages) {
+    std::string user_content = item.first;
+    std::string assistant_content = item.second;
+
+    // JSON Vision Hack
+    if (!user_content.empty() && user_content.front() == '[') {
       try {
-        auto j = json::parse(content);
+        auto j = json::parse(user_content);
         if (j.is_array()) {
           std::string combined_text;
           for (const auto &item : j) {
@@ -236,50 +183,22 @@ InferenceServiceImpl::ChatCompletion(ServerContext *context,
                 combined_text += item["text"].get<std::string>();
               } else if (type == "image_url" && item.contains("image_url")) {
                 std::string url = item["image_url"]["url"];
-                // TODO: Load image from URL and pass to LLM.
-                // For now, format as text description or Qwen2-VL prompt
-                // placeholder combined_text +=
-                // "<|vision_start|><|image_pad|><|vision_end|>";
                 combined_text += "\n[Image: " + url + "]\n";
                 std::cout << "Detected Image URL: " << url << std::endl;
               }
             }
           }
-          content = combined_text;
+          user_content = combined_text;
         }
-      } catch (json::parse_error &e) {
-        // Ignore, treat as raw text
+      } catch (json::parse_error &) {
+        // Ignore
       }
     }
-
-    if (role == "user") {
-      prompt_items.emplace_back(content, "");
-    } else if (role == "assistant") {
-      if (!prompt_items.empty()) {
-        prompt_items.back().second = content;
-      }
-    } else if (role == "system") {
-      // Prepend system prompt to next user message or just ignore for now if
-      // not supported via API Simple hack: append to next user message if
-      // vector empty, or previous? For now, let's ignore or print
-      std::cout << "System prompt ignored (TODO: Implement): " << content
-                << std::endl;
-    }
+    processed_messages.emplace_back(user_content, assistant_content);
   }
-
-  GrpcStreamBuf stream_buf(writer, model_id);
-  std::ostream os(&stream_buf);
 
   std::cout << "[System] Starting generation..." << std::flush;
-  try {
-    llm->response(prompt_items, &os);
-  } catch (const std::exception &e) {
-    std::cerr << "\n[Error] Error during inference: " << e.what() << std::endl;
-    return Status(grpc::INTERNAL, "Inference failed: " + std::string(e.what()));
-  }
-
-  os.flush();
-  os.flush();
+  llm->response(processed_messages, os);
   std::cout << "\n[System] Generation finished." << std::endl;
 
   // Log Metrics
@@ -287,29 +206,9 @@ InferenceServiceImpl::ChatCompletion(ServerContext *context,
   if (llm_context) {
     double prefill_ms = llm_context->prefill_us / 1000.0;
     double decode_ms = llm_context->decode_us / 1000.0;
-    double speed = 0.0;
-    if (llm_context->decode_us > 0) {
-      speed = llm_context->gen_seq_len / (llm_context->decode_us / 1000000.0);
-    }
-    std::cout << "[Metrics] Prompt Tokens: " << llm_context->prompt_len << "\n"
-              << "[Metrics] Generated Tokens: " << llm_context->gen_seq_len
-              << "\n"
-              << "[Metrics] Prefill Time: " << prefill_ms << " ms\n"
-              << "[Metrics] Decode Time: " << decode_ms << " ms\n"
-              << "[Metrics] Speed: " << speed << " tokens/sec" << std::endl;
+    std::cout << "[Metrics] Prefill: " << prefill_ms
+              << " ms, Decode: " << decode_ms << " ms" << std::endl;
   }
-
-  ChatResponse final_response;
-  final_response.set_id("chatcmpl-" + model_id);
-  final_response.set_created(time(nullptr));
-  final_response.set_model(model_id);
-  auto *choice = final_response.add_choices();
-  choice->set_index(0);
-  choice->set_finish_reason("stop");
-  choice->mutable_delta();
-  writer->Write(final_response);
-
-  return Status::OK;
 }
 
 Status InferenceServiceImpl::Embeddings(ServerContext *context,

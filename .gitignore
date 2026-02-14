@@ -12,3 +12,7 @@ inference-services/mnn-service/build/*
 /inference-services/mnn-service/Testing/Temporary/
 /gateway/.env
 /inference-services/mnn-service/.env
+/inference-services/onnx-service/.env
+/inference-services/common/build/
+/inference-services/onnx-service/build/
+.env
