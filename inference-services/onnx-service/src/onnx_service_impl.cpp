@@ -28,13 +28,45 @@ Ort::Session *OnnxServiceImpl::GetOrLoadSession(const std::string &model_id) {
   }
 
   std::string model_path = path_it->second;
-  // Heuristic: if path is a directory, look for .onnx file
+
+  // Helper to find .onnx file recursively
   if (std::filesystem::is_directory(model_path)) {
-    for (const auto &entry : std::filesystem::directory_iterator(model_path)) {
-      if (entry.path().extension() == ".onnx") {
-        model_path = entry.path().string();
-        break;
+    std::string best_path;
+    int max_priority = -1;
+
+    for (const auto &entry :
+         std::filesystem::recursive_directory_iterator(model_path)) {
+      if (entry.is_regular_file() && entry.path().extension() == ".onnx") {
+        std::string filename = entry.path().filename().string();
+        int priority = 0;
+
+        if (filename == "model_q4_k_m.onnx")
+          priority = 10;
+        else if (filename == "model_q4.onnx")
+          priority = 9;
+        else if (filename == "model_int4.onnx")
+          priority = 8;
+        else if (filename == "model_quantized.onnx")
+          priority = 7;
+        else if (filename == "model_int8.onnx")
+          priority = 7;
+        else if (filename == "model.onnx")
+          priority = 6;
+        else if (filename == "decoder_model_merged_quantized.onnx")
+          priority = 5;
+        else if (filename == "decoder_model_merged.onnx")
+          priority = 4;
+        else
+          priority = 1;
+
+        if (priority > max_priority) {
+          max_priority = priority;
+          best_path = entry.path().string();
+        }
       }
+    }
+    if (!best_path.empty()) {
+      model_path = best_path;
     }
   }
 
