@@ -10,6 +10,9 @@ import io.vertx.core.Vertx
 class RouterAi(private val vertx: Vertx) {
     // Registry of services by model ID
     private val services = mutableMapOf<String, InferenceService>()
+
+    // Registry of nodes by prefix for fallback routing
+    private val prefixRoutes = mutableMapOf<String, InferenceService>()
     
     // Fallback or default service
     private var defaultService: InferenceService? = null
@@ -23,21 +26,63 @@ class RouterAi(private val vertx: Vertx) {
     }
 
     private fun loadConfig() {
-        logger.info("Loading default configuration...")
-        // Simple JSON config loading (could use Jackson or Vert.x Config)
-        // For MVP, manual setup based on env or default file
+        logger.info("loading configuration...")
         
-        // Define Default Local Node
-        val localNode = com.tactorder.gateway.domain.model.NodeConfig(
-            id = "local-mnn",
-            type = "mnn-jni",
-            models = listOf(
-                com.tactorder.gateway.domain.model.ModelConfig("native-qwen2-0.5b-instruct", "/home/nickzt/Projects/LLM_campf/models_mnn/qwen2-0.5b-instruct/config.json"),
-                com.tactorder.gateway.domain.model.ModelConfig("native-embedding-0.6b", "/home/nickzt/Projects/LLM_campf/models_mnn/Qwen3-Embedding-0.6B-MNN/config.json")
-            )
-        )
-        registerNode(localNode)
+        // 1. Load .env for global settings (like models dir)
+        val dotenv = io.github.cdimascio.dotenv.Dotenv.configure().ignoreIfMissing().load()
+        val modelsDir = dotenv["MNN_MODELS_DIR"]
+        
+        // 2. Load nodes.json for service definition
+        try {
+            val configFile = java.io.File("nodes.json")
+            if (configFile.exists()) {
+                val json = io.vertx.core.json.JsonObject(configFile.readText())
+                val nodesArray = json.getJsonArray("nodes")
+                
+                nodesArray.forEach { node ->
+                    if (node is io.vertx.core.json.JsonObject) {
+                        val config = com.tactorder.gateway.domain.model.NodeConfig(
+                            id = node.getString("id"),
+                            type = node.getString("type"),
+                            host = node.getString("host"),
+                            port = node.getInteger("port"),
+                            prefix = node.getString("prefix", "")
+                        )
+                        
+                        if (config.type == "mnn-jni") {
+                            // SCAN local models if modelsDir is set
+                            if (modelsDir != null) {
+                                val dir = java.io.File(modelsDir)
+                                if (dir.exists() && dir.isDirectory) {
+                                    val scannedModels = mutableListOf<com.tactorder.gateway.domain.model.ModelConfig>()
+                                    dir.listFiles()?.forEach { modelDir ->
+                                        if (modelDir.isDirectory && java.io.File(modelDir, "config.json").exists()) {
+                                            // Construct ID using the prefix from nodes.json
+                                            val modelId = config.prefix + modelDir.name
+                                            val path = java.io.File(modelDir, "config.json").absolutePath
+                                            scannedModels.add(com.tactorder.gateway.domain.model.ModelConfig(modelId, path))
+                                        }
+                                    }
+                                    val updatedConfig = config.copy(models = scannedModels)
+                                    registerNode(updatedConfig)
+                                } else {
+                                     logger.warn("MNN_MODELS_DIR not found: $modelsDir")
+                                }
+                            }
+                        } else {
+                            // For gRPC or other types, just register the node (maybe with empty models list initially)
+                            registerNode(config)
+                        }
+                    }
+                }
+            } else {
+                logger.warn("nodes.json not found")
+            }
+        } catch (e: Exception) {
+            logger.error("Failed to load nodes.json", e)
+        }
     }
+
 
     fun registerNode(config: com.tactorder.gateway.domain.model.NodeConfig) {
         logger.info("Registering node: ${config.id} type=${config.type}")
@@ -50,31 +95,44 @@ class RouterAi(private val vertx: Vertx) {
                             ?: throw IllegalArgumentException("Model path not configured for $modelId in node ${config.id}")
                     }
                 )
+                // Register models explicitly
                 config.models.forEach { model ->
                     logger.info("Registering model: ${model.id}")
                     registerService(model.id, mnnService)
                 }
+                // Register prefix fallback
+                if (config.prefix.isNotEmpty()) {
+                    prefixRoutes[config.prefix] = mnnService
+                }
             }
-// ...
             "grpc" -> {
                 if (config.host != null && config.port != null) {
                     val client = InferenceClient(vertx, config.host, config.port)
                     val service = GrpcInferenceService(client)
-                    config.models.forEach { model ->
-                        registerService(model.id, service)
-                    }
+                     
+                     logger.info("Registered gRPC client for node ${config.id} (prefix: ${config.prefix})")
+                     if (config.prefix.isNotEmpty()) {
+                        prefixRoutes[config.prefix] = service
+                     }
                 }
             }
         }
     }
     
     fun getService(modelId: String): InferenceService? {
-        if (modelId.startsWith("native-")) {
-             // For now, if it starts with native, return the mnn service even if not explicitly registered by ID
-             // This allows dynamic native model loading if we had a better path resolver
-             return services.values.filterIsInstance<MnnJniService>().firstOrNull() 
+        // 1. Try exact match
+        val exact = services[modelId]
+        if (exact != null) return exact
+
+        // 2. Try prefix match
+        for ((prefix, service) in prefixRoutes) {
+            if (modelId.startsWith(prefix)) {
+                return service
+            }
         }
-        return services[modelId] ?: defaultService ?: services.values.firstOrNull()
+
+        // 3. Fallback
+        return defaultService ?: services.values.firstOrNull()
     }
     
     fun registerGrpcClient(modelId: String, host: String, port: Int) {
@@ -90,7 +148,24 @@ class RouterAi(private val vertx: Vertx) {
     }
 
     suspend fun listModels(): List<String> {
-        // Return keys of registered services
-        return services.keys.toList()
+        val allModels = mutableSetOf<String>()
+        // 1. Local models
+        allModels.addAll(services.keys)
+        
+        // 2. Remote models via prefixRoutes
+        for ((prefix, service) in prefixRoutes) {
+            if (service is GrpcInferenceService) {
+                try {
+                    val remoteIds = service.listModels()
+                    // Prepend prefix to make them routable via prefixRoutes
+                    remoteIds.forEach { id ->
+                        allModels.add(prefix + id)
+                    }
+                } catch (e: Exception) {
+                    logger.error("Failed to list models from remote service with prefix $prefix", e)
+                }
+            }
+        }
+        return allModels.toList()
     }
 }

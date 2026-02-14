@@ -10,3 +10,5 @@ inference-services/mnn-service/build/*
 /inference-services/mnn-service/.cache/
 /inference-services/mnn-service/CMakeCache.txt
 /inference-services/mnn-service/Testing/Temporary/
+/gateway/.env
+/inference-services/mnn-service/.env

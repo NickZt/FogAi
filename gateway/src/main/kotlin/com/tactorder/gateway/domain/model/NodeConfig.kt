@@ -5,6 +5,7 @@ data class NodeConfig(
     val type: String, // "mnn-jni", "grpc"
     val host: String? = null,
     val port: Int? = null,
+    val prefix: String = "",
     val models: List<ModelConfig> = emptyList()
 )
 

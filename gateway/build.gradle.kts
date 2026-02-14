@@ -36,9 +36,11 @@ dependencies {
     implementation("com.google.protobuf:protobuf-java-util:$protobufVersion") // For JSON conversion if needed
     implementation("javax.annotation:javax.annotation-api:1.3.2") // Fix for missing Generated annotation
     
-    // Logging
     implementation("org.slf4j:slf4j-api:2.0.12")
     implementation("ch.qos.logback:logback-classic:1.5.3")
+    
+    // Dotenv
+    implementation("io.github.cdimascio:dotenv-kotlin:6.4.1")
 }
 
 application {
