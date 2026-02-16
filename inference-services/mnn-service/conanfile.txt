@@ -1,0 +1,9 @@
+[requires]
+grpc/1.54.3
+protobuf/3.21.12
+nlohmann_json/3.11.3
+# mnn/2.0.0 # MNN might not be in Conan center, might need manual build or custom recipe
+
+[generators]
+CMakeDeps
+CMakeToolchain

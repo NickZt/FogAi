@@ -1,0 +1,110 @@
+gateway/build/*
+gateway/.gradle/*
+
+/inference-services/mnn-service/CMakeFiles/
+/inference-services/mnn-service/_deps/
+/inference-services/mnn-service/generated/
+/inference-services/mnn-service/.cmake/
+/inference-services/mnn-service/.cache/
+/inference-services/mnn-service/CMakeCache.txt
+/inference-services/mnn-service/Testing/Temporary/
+
+/inference-services/common/build/
+/inference-services/onnx-service/build/
+
+/gateway/libs/
+
+ # Build artifacts - Gateway
+gateway/out/
+
+# Build artifacts - Inference Services
+inference-services/mnn-service/build/*
+inference-services/onnx-service/build/
+inference-services/common/build/
+
+# CMake artifacts
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+Makefile
+
+# Conan artifacts
+conan_toolchain.cmake
+conan_paths.cmake
+conanbuildinfo.cmake
+conaninfo.txt
+graph_info.json
+deactivate_conanbuild.sh
+activate_conanbuild.sh
+CMakeUserPresets.json
+
+# IDE configurations
+/.idea/
+/inference-services/mnn-service/.idea/
+/inference-services/onnx-service/.idea/
+/inference-services/common/.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Environment files
+.env
+/gateway/.env
+/inference-services/mnn-service/.env
+/inference-services/onnx-service/.env
+
+# Models and data (large files)
+models/
+models_onnx/
+*.mnn
+*.onnx
+*.bin
+*.safetensors
+*.pt
+*.pth
+
+# Python artifacts
+__pycache__/
+*.py[cod]
+*$py.class
+.Python
+inference_pb2.py
+inference_pb2_grpc.py
+*_pb2.py
+*_pb2_grpc.py
+
+# Logs
+*.log
+logs/
+*.out
+
+# Test artifacts
+test_chat.json
+test_embedding.json
+test_results/
+
+# Temporary files
+*.tmp
+*.temp
+.cache/
+
+# OS files
+Thumbs.db
+
+# Compiled libraries
+*.so
+*.dylib
+*.dll
+*.a
+*.lib
+
+# Java/Kotlin
+*.class
+*.jar
+!gradle-wrapper.jar
+*.war
+*.ear
+hs_err_pid*
+

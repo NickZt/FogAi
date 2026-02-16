@@ -1,0 +1,31 @@
+services:
+  open-webui:
+    image: ghcr.io/open-webui/open-webui:main
+    container_name: open-webui
+    ports:
+      - "3000:8080"
+    environment:
+      - OPENAI_API_BASE_URL=http://host.docker.internal:8080/v1
+      - OPENAI_API_KEY=sk-dummy-key
+      - WEBUI_NAME=FogAI Chat
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - open-webui:/app/backend/data
+    restart: unless-stopped
+
+  lobe-chat:
+    image: lobehub/lobe-chat
+    container_name: lobe-chat
+    ports:
+      - "3210:3210"
+    environment:
+      - OPENAI_PROXY_URL=http://host.docker.internal:8080/v1
+      - OPENAI_API_KEY=sk-dummy-key
+      - ACCESS_CODE=fogai
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    restart: unless-stopped
+
+volumes:
+  open-webui:
