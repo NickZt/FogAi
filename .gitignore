@@ -16,3 +16,5 @@ inference-services/mnn-service/build/*
 /inference-services/common/build/
 /inference-services/onnx-service/build/
 .env
+/inference-services/onnx-service/.idea/
+/inference-services/common/.idea/

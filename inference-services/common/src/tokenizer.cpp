@@ -184,9 +184,7 @@ Tokenizer::createTokenizer(const std::string &filename) {
   default:
     return nullptr;
   }
-  // load special tokens
   tokenizer->load_special(tok_file);
-  // load vocabs
   tokenizer->load_vocab(tok_file);
   tok_file.close();
   tokenizer->cache_special_tokens();

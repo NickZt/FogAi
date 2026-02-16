@@ -83,7 +83,6 @@ class MnnJniService(
     }
 
     override suspend fun listModels(): List<String> {
-        // TODO: Implement model discovery from filesystem
         return listOf("native-qwen2-0.5b-instruct", "native-bge-m3-quant")
     }
 

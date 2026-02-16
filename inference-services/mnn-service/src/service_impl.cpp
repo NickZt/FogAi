@@ -154,15 +154,7 @@ void InferenceServiceImpl::GenerateStream(
   // Process messages specifically for MNN (e.g. image parsing)
   // The messages passed here are already separated by role, but we might need
   // to do the JSON parsing for "content" if it's multimodal.
-  // The previous implementation did this parsing on the request->messages()
-  // loop. Here we have vector<pair<string, string>>. The first string is User
-  // Content (or JSON), the second is Assistant Content.
 
-  // We need to reconstruct this logic.
-  // BUT! MNN::Transformer::Llm::response takes `vector<pair<string, string>>`.
-  // It expects the content to be processed? OR does it handle vision tags?
-  // The previous code MANUALLY parsed JSON to extract image URLs and append
-  // tags. So we MUST process the messages here before passing to llm->response.
 
   std::vector<std::pair<std::string, std::string>> processed_messages;
 

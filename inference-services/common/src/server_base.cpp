@@ -97,14 +97,7 @@ Status ServerBase::ChatCompletion(ServerContext *context,
         msg.content(),
         ""); // Simplification: assuming user/system roles map to content.
     // Logic refinement needed for roles, but sticking to existing MNN pattern
-    // for now: MNN implementation was: pair<string, string> where? Ah, checked
-    // service_impl.cpp: user -> emplace_back(content, "") assistant ->
-    // back().second = content system -> ignore/print
-
-    // We should replicate that logic or Pass raw messages to GenerateStream?
-    // Better to pass raw messages and let subclass handle formatting?
-    // But GenerateStream signature in header used vector<pair>.
-    // Let's replicate MNN logic here for shared use.
+    // for now: MNN implementation was: pair<string, string>
 
     std::string role = msg.role();
     std::string content = msg.content();
