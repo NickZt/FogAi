@@ -4,9 +4,14 @@ project(mnn-inference-service CXX)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-# Find Protobuf and gRPC
-find_package(Protobuf REQUIRED)
-find_package(gRPC REQUIRED)
+# Add Conan generated files path
+list(APPEND CMAKE_PREFIX_PATH "${CMAKE_CURRENT_SOURCE_DIR}")
+list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}")
+
+# Find Protobuf and gRPC (from Conan)
+find_package(protobuf CONFIG REQUIRED)
+find_package(gRPC CONFIG REQUIRED)
+find_package(nlohmann_json CONFIG REQUIRED)
 
 # Fetch MNN
 include(FetchContent)
@@ -48,7 +53,7 @@ target_include_directories(mnn_bridge PRIVATE
 # Main executable
 add_executable(mnn-service src/main.cpp src/service_impl.cpp)
 # Link MNN, MNN_Express, llm, and common library (which has proto and json)
-target_link_libraries(mnn-service PRIVATE inference_common MNN MNN_Express llm)
+target_link_libraries(mnn-service PRIVATE inference_common MNN MNN_Express llm protobuf::libprotobuf gRPC::grpc++ gRPC::grpc nlohmann_json::nlohmann_json)
 message(STATUS "Including MNN headers from: ${CMAKE_CURRENT_SOURCE_DIR}/MNN/include")
 target_include_directories(mnn-service PUBLIC src 
     "${CMAKE_CURRENT_SOURCE_DIR}/MNN/include" 

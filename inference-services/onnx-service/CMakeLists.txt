@@ -4,9 +4,13 @@ project(onnx-inference-service CXX)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-find_package(Protobuf REQUIRED)
-find_package(gRPC REQUIRED)
-find_package(nlohmann_json 3.11.2 QUIET) # Common might fetch it, but good to find here too
+# Add Conan generated files path
+list(APPEND CMAKE_PREFIX_PATH "${CMAKE_CURRENT_SOURCE_DIR}")
+list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}")
+
+find_package(protobuf CONFIG REQUIRED)
+find_package(gRPC CONFIG REQUIRED)
+find_package(nlohmann_json CONFIG REQUIRED)
 
 # ONNX Runtime (Find or Fetch?)
 # Simplest is to assume it is installed or find_package works.

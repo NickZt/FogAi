@@ -24,7 +24,7 @@ class ChatCompletionHandler(private val chatService: ChatService) {
         val body = ctx.body().asJsonObject()
         
         // Manual mapping from Vert.x JsonObject to Domain Model to handle flexibility
-        // (Fast mapping for now, ideally use Jackson with custom deserializer coverage)
+        // (Fast mapping for now, ideally TODO use Jackson with custom deserializer coverage)
         val request = try {
             mapToChatRequest(body)
         } catch (e: Exception) {

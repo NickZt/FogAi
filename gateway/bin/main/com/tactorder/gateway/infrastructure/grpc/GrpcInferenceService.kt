@@ -44,12 +44,6 @@ class GrpcInferenceService(
             ChatResponse(
                 id = protoResp.id,
                 created = protoResp.created,
-                // We typically want to return the original requested model ID (with prefix) to the user
-                // so they can match request/response.
-                // However, the proto returns what the backend sent (unprefixed).
-                // We could re-attach prefix, or just pass through.
-                // For consistency with OpenAI, if user asked for "remote-foo", they expect "remote-foo".
-                // But let's verify what protoResp.model contains. It likely contains "foo".
                 // Let's prepend prefix if configured.
                 model = if (modelPrefix.isNotEmpty()) modelPrefix + protoResp.model else protoResp.model,
                 choices = listOf(
