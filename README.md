@@ -196,7 +196,14 @@ Edit `gateway/nodes.json` to register inference nodes:
       "type": "grpc",
       "host": "localhost",
       "port": 50051,
-      "prefix": "remote-"
+      "prefix": "mnngrpc"
+    },
+    {
+      "id": "onnx-service",
+      "type": "grpc",
+      "host": "localhost",
+      "port": 50052,
+      "prefix": "onnx-"
     }
   ]
 }
@@ -212,7 +219,7 @@ curl http://localhost:8080/v1/models
 curl -X POST http://localhost:8080/v1/chat/completions \
   -H "Content-Type: application/json" \
   -d '{
-    "model": "remote-qwen2-0.5b",
+    "model": "mnngrpcqwen2-0.5b",
     "messages": [{"role": "user", "content": "Hello!"}],
     "stream": true,
     "max_tokens": 50
@@ -251,7 +258,7 @@ FogAI implements OpenAI-compatible endpoints:
 **Request:**
 ```json
 {
-  "model": "remote-qwen2-0.5b",
+  "model": "mnngrpcqwen2-0.5b",
   "messages": [
     {"role": "system", "content": "You are a helpful assistant."},
     {"role": "user", "content": "Explain quantum computing"}
@@ -412,12 +419,12 @@ flowchart TD
 The Gateway automatically discovers models:
 
 1. **Local Models** (`MNN_MODELS_DIR`): Scanned and prefixed with `native-`
-2. **Remote Models**: Queried via gRPC `ListModels` and prefixed (e.g., `remote-`)
+2. **Remote Models**: Queried via gRPC `ListModels` and prefixed (e.g., `mnngrpc`)
 
 ### Routing Strategy
 
 1. **Exact Match**: Routes to service with registered model ID
-2. **Prefix Match**: Falls back to prefix-based routing (`remote-*` → gRPC service)
+2. **Prefix Match**: Falls back to prefix-based routing (`mnngrpc*` → gRPC service)
 
 ## Development
 
