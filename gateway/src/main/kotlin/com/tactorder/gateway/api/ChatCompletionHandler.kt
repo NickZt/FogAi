@@ -107,6 +107,11 @@ class ChatCompletionHandler(private val chatService: ChatService) {
                 }
             } catch (e: IllegalArgumentException) {
                 ctx.response().setStatusCode(404).end(e.message)
+            } catch (e: IllegalStateException) {
+                logger.warn("Queue rejected request: ${e.message}")
+                if (!ctx.response().ended()) {
+                    ctx.response().setStatusCode(429).end("Too Many Requests: ${e.message}")
+                }
             } catch (e: Exception) {
                 logger.error("Error processing inference", e)
                 if (!ctx.response().ended()) {

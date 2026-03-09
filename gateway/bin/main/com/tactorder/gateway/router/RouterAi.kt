@@ -18,6 +18,9 @@ class RouterAi(private val vertx: Vertx) {
     private var defaultService: InferenceService? = null
     private val logger = org.slf4j.LoggerFactory.getLogger(RouterAi::class.java)
 
+    lateinit var queueManager: com.tactorder.gateway.application.QueueManager
+        private set
+
     init {
         // Load configuration
         logger.info("Initializing RouterAi...")
@@ -37,16 +40,45 @@ class RouterAi(private val vertx: Vertx) {
             val configFile = java.io.File("nodes.json")
             if (configFile.exists()) {
                 val json = io.vertx.core.json.JsonObject(configFile.readText())
+                
+                // Load Queue Config
+                val queueObj = json.getJsonObject("queue")
+                val queueConfig = if (queueObj != null) {
+                    com.tactorder.gateway.application.QueueConfig(
+                        criticalSlaMs = queueObj.getLong("criticalSlaMs", 1000L),
+                        normalSlaMs = queueObj.getLong("normalSlaMs", 10000L),
+                        backgroundSlaMs = queueObj.getLong("backgroundSlaMs", 300000L),
+                        maxQueueSize = queueObj.getInteger("maxQueueSize", 1000)
+                    )
+                } else {
+                    com.tactorder.gateway.application.QueueConfig()
+                }
+                queueManager = com.tactorder.gateway.application.QueueManager(queueConfig)
+                
                 val nodesArray = json.getJsonArray("nodes")
                 
                 nodesArray.forEach { node ->
                     if (node is io.vertx.core.json.JsonObject) {
+                        val modelsArray = node.getJsonArray("models")
+                        val explicitModels = mutableListOf<com.tactorder.gateway.domain.model.ModelConfig>()
+                        if (modelsArray != null) {
+                            modelsArray.forEach { modelRaw ->
+                                if (modelRaw is io.vertx.core.json.JsonObject) {
+                                    explicitModels.add(com.tactorder.gateway.domain.model.ModelConfig(
+                                        id = modelRaw.getString("id"),
+                                        path = modelRaw.getString("path")
+                                    ))
+                                }
+                            }
+                        }
+
                         val config = com.tactorder.gateway.domain.model.NodeConfig(
                             id = node.getString("id"),
                             type = node.getString("type"),
                             host = node.getString("host"),
                             port = node.getInteger("port"),
-                            prefix = node.getString("prefix", "")
+                            prefix = node.getString("prefix", ""),
+                            models = explicitModels
                         )
                         
                         if (config.type == "mnn-jni") {
@@ -77,9 +109,13 @@ class RouterAi(private val vertx: Vertx) {
                 }
             } else {
                 logger.warn("nodes.json not found")
+                queueManager = com.tactorder.gateway.application.QueueManager(com.tactorder.gateway.application.QueueConfig())
             }
         } catch (e: Exception) {
             logger.error("Failed to load nodes.json", e)
+            if (!this::queueManager.isInitialized) {
+                queueManager = com.tactorder.gateway.application.QueueManager(com.tactorder.gateway.application.QueueConfig())
+            }
         }
     }
 
@@ -113,6 +149,10 @@ class RouterAi(private val vertx: Vertx) {
                      logger.info("Registered gRPC client for node ${config.id} (prefix: ${config.prefix})")
                      if (config.prefix.isNotEmpty()) {
                         prefixRoutes[config.prefix] = service
+                     }
+                     config.models.forEach { model ->
+                         logger.info("Registering specific gRPC model: ${model.id}")
+                         registerService(model.id, service)
                      }
                 }
             }

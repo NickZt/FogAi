@@ -237,7 +237,8 @@ curl -X POST http://localhost:8080/v1/embeddings \
 ### Run Integration Tests
 
 ```bash
-chmod +x test_integration.sh
+cd testsuite
+chmod +x test_integration.sh stress_test.sh
 ./test_integration.sh
 ```
 
@@ -372,8 +373,10 @@ FogAI/
 │   └── mnn-engine.md         # MNN Service Details
 │
 ├── models/                   # Model Storage (gitignored)
-├── scripts/                  # Utility Scripts
-└── test_integration.sh       # Integration Test Suite
+├── scripts/                  # Utility Scripts (download_models.sh)
+└── testsuite/                # Integration Test Suite and Payload Generators
+    ├── test_integration.sh
+    └── stress_test.sh
 ```
 
 ## Priority-Based Routing
@@ -461,7 +464,7 @@ cd inference-services/mnn-service
 - [x] Streaming Chat Completions
 - [x] Embeddings Support
 - [ ] JNI/Panama Native Bridge (Type A)
-- [ ] Priority Queue Implementation
+- [x] DSA Logic: Implement the Priority Queue and Preemption logic in Vert.x.
 - [ ] TensorRT GPU Support
 - [ ] Model Caching & Warm-up
 - [ ] Request Batching

@@ -107,5 +107,48 @@ curl -s -X POST "$GATEWAY_URL/v1/chat/completions" \
   }'
 echo ""
 
+# 8. Priority Queue Preemption
+print_header "TEST CASE 8: Priority Queue Preemption (EDF)"
+echo "Spawning 30 BACKGROUND embedding tasks..."
+for i in {1..30}; do
+  curl -s -X POST "$GATEWAY_URL/v1/embeddings" \
+    -H "Content-Type: application/json" \
+    -d '{"model": "'"$EMBEDDING_MODEL"'", "input": "Load generator text payload '$i' here."}' > /dev/null &
+done
+
+echo "Immediately sending 1 CRITICAL gliner-bi-v2 request..."
+START_TIME=$(date +%s%3N)
+curl -s -o /dev/null -w "Response Code: %{http_code}, Time: %{time_total}s\n" -X POST "$GATEWAY_URL/v1/chat/completions" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "onnx-gliner-bi-v2",
+    "messages": [{"role": "user", "content": "Extract entities from this text."}],
+    "stream": false
+  }'
+END_TIME=$(date +%s%3N)
+DURATION=$((END_TIME - START_TIME))
+echo "Critical Request Client-Side Duration: ${DURATION}ms"
+echo "Expected: Should complete quickly and preempt background queue."
+
+# 9. Memory Restraint Swapping
+print_header "TEST CASE 9: Memory Constraint Swapping"
+echo "Alternating between $ONNX_MODEL and gliner-bi-v2 to trigger LRU eviction..."
+for i in {1..4}; do
+  if [ $((i%2)) -eq 0 ]; then
+     TARGET="$ONNX_MODEL"
+  else
+     TARGET="onnx-gliner-bi-v2"
+  fi
+  echo "Requesting $TARGET ..."
+  curl -s -o /dev/null -w "Status: %{http_code}\n" -X POST "$GATEWAY_URL/v1/chat/completions" \
+    -H "Content-Type: application/json" \
+    -d '{
+      "model": "'"$TARGET"'",
+      "messages": [{"role": "user", "content": "Hello."}],
+      "stream": false
+    }'
+done
+echo "Expected: Engine successfully swaps models without returning 500 or crashing out of memory."
+
 echo ""
 echo "=== Test Suite Complete ==="

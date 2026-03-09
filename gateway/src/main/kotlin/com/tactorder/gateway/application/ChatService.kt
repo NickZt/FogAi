@@ -32,7 +32,18 @@ class ChatService(private val routerAi: RouterAi) {
         }
         
         val newRequest = request.copy(messages = processedMessages)
-        return service.chatCompletion(newRequest)
+        
+        val priority = if (request.model.contains("gliner", ignoreCase = true)) {
+            com.tactorder.gateway.application.Priority.CRITICAL
+        } else {
+            com.tactorder.gateway.application.Priority.NORMAL
+        }
+        
+        return kotlinx.coroutines.flow.flow {
+            routerAi.queueManager.execute(priority) {
+                service.chatCompletion(newRequest).collect { emit(it) }
+            }
+        }
     }
 
     private fun processMessages(messages: List<ChatMessage>): List<ChatMessage> {
