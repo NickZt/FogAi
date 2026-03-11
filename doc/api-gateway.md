@@ -33,10 +33,10 @@ Decides which service handles a request.
 - **Service Registry**: Loads from `nodes.json`.
 - **Dynamic Discovery**:
     - **Local**: Scans `MNN_MODELS_DIR` and registers models with a configured prefix (e.g., `native-`).
-    - **Remote**: Registers gRPC clients and queries their model lists, applying a prefix (e.g., `remote-`).
+    - **Remote**: Registers gRPC clients and queries their model lists, applying a prefix (e.g., `mnngrpc`).
 - **Routing Strategy**:
     1.  **Exact Match**: Routes to service with registered model ID.
-    2.  **Prefix Match**: Fallback routing based on model ID prefix (e.g., `remote-*`).
+    2.  **Prefix Match**: Fallback routing based on model ID prefix (e.g., `mnngrpc*`).
 
 ### gRPC Client (`InferenceClient`)
 Maintains connections to remote Inference Services.
@@ -50,14 +50,21 @@ Configuration is managed via `.env` files and `nodes.json`.
     - `GATEWAY_PORT`: Port for external API (default: 8080).
     - `MNN_MODELS_DIR`: Directory for local MNN models.
 
-- **`nodes.json`**: Service Registry.
+- **`nodes.json`**: Service Registry & Queue Management.
     - Defines nodes (`local-mnn`, `remote-gpu`).
     - Configures connection details (host, port).
-    - Assigns **prefixes** (`native-`, `remote-`) for routing and model discovery.
+    - Assigns **prefixes** (`native-`, `mnngrpc`, `onnx-`) for routing and model discovery.
+    - **`queue` section**: Defines Earliest Deadline First (EDF) SLA limits (`criticalSlaMs`, `normalSlaMs`, `backgroundSlaMs`) to restrict memory exhaustion from overlapping traffic.
 
 Example `nodes.json`:
 ```json
 {
+  "queue": {
+    "criticalSlaMs": 50,
+    "normalSlaMs": 5000,
+    "backgroundSlaMs": 60000,
+    "maxQueueSize": 1000
+  },
   "nodes": [
     {
       "id": "local-mnn",
@@ -65,11 +72,11 @@ Example `nodes.json`:
       "prefix": "native-"
     },
     {
-      "id": "remote-mnn",
+      "id": "onnx-service",
       "type": "grpc",
       "host": "localhost",
-      "port": 50051,
-      "prefix": "remote-"
+      "port": 50052,
+      "prefix": "onnx-"
     }
   ]
 }

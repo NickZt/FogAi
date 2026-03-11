@@ -42,9 +42,16 @@ class EmbeddingsHandler(private val routerAi: RouterAi) {
                     return@launch
                 }
                 
-                val response = service.embeddings(request)
+                val response = routerAi.queueManager.execute(com.tactorder.gateway.application.Priority.BACKGROUND) {
+                    service.embeddings(request)
+                }
                 ctx.json(response)
                 
+            } catch (e: IllegalStateException) {
+                logger.warn("Queue rejected embedding request: ${e.message}")
+                if (!ctx.response().ended()) {
+                    ctx.response().setStatusCode(429).end("Too Many Requests: ${e.message}")
+                }
             } catch (e: Exception) {
                 logger.error("Embedding generation failed", e)
                 ctx.fail(500, e)

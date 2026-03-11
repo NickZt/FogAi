@@ -21,6 +21,14 @@ Ort::Session *OnnxServiceImpl::GetOrLoadSession(const std::string &model_id) {
     return it->second.get();
   }
 
+  // Single Active Model Policy
+  if (!sessions_.empty()) {
+    std::cout << "[System] Unloading previous ONNX models to free memory..."
+              << std::endl;
+    sessions_.clear();
+    tokenizers_.clear();
+  }
+
   auto path_it = available_models_.find(model_id);
   if (path_it == available_models_.end()) {
     std::cerr << "Model ID not found: " << model_id << std::endl;

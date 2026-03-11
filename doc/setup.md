@@ -303,11 +303,11 @@ Edit `gateway/nodes.json`:
       "type": "grpc",
       "host": "localhost",
       "port": 50051,
-      "prefix": "remote-",
+      "prefix": "mnngrpc",
       "enabled": true
     },
     {
-      "id": "remote-onnx",
+      "id": "onnx-service",
       "type": "grpc",
       "host": "localhost",
       "port": 50052,
@@ -391,7 +391,7 @@ curl http://localhost:8080/v1/models
 curl -X POST http://localhost:8080/v1/chat/completions \
   -H "Content-Type: application/json" \
   -d '{
-    "model": "remote-qwen2-0.5b-instruct",
+    "model": "mnngrpcqwen2-0.5b-instruct",
     "messages": [{"role": "user", "content": "Hello!"}],
     "stream": false,
     "max_tokens": 20

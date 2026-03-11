@@ -211,7 +211,7 @@ flowchart TD
     ScanLocal --> LocalModels[Register Local Models<br/>Prefix: native-]
     
     LoadConfig --> QueryRemote[Query Remote Services<br/>gRPC ListModels]
-    QueryRemote --> RemoteModels[Register Remote Models<br/>Prefix: remote-]
+    QueryRemote --> RemoteModels[Register Remote Models<br/>Prefix: mnngrpc, onnx-]
     
     LocalModels --> Registry[Model Registry]
     RemoteModels --> Registry
@@ -234,7 +234,8 @@ flowchart TD
 ## 10. Future Roadmap
 - **NativeMnnBridge:** Implement the JNI/Panama layer for MNN.
 - **Model Registry:** Dynamic discovery and management of models.
-- **DSA Logic:** Implement the Priority Queue and Preemption logic in Vert.x.
+- [x] DSA Logic / Priority Queue Implementation in Vert.x
+- [ ] TensorRT GPU Support
 - **Distributed Tracing:** OpenTelemetry integration for observability.
 - **Request Batching:** Optimize throughput for batch inference.
 - **Model Warm-up:** Pre-load frequently used models.

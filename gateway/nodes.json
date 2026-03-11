@@ -1,4 +1,10 @@
 {
+    "queue": {
+        "criticalSlaMs": 50,
+        "normalSlaMs": 5000,
+        "backgroundSlaMs": 60000,
+        "maxQueueSize": 1000
+    },
     "nodes": [
         {
             "id": "local-mnn",
@@ -17,7 +23,13 @@
             "type": "grpc",
             "host": "localhost",
             "port": 50052,
-            "prefix": "onnx-"
+            "prefix": "onnx-",
+            "models": [
+                {
+                    "id": "gliner-bi-v2",
+                    "path": "models_onnx/gliner-bi-v2"
+                }
+            ]
         }
     ]
 }

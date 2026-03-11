@@ -32,30 +32,25 @@ class ChatService(private val routerAi: RouterAi) {
         }
         
         val newRequest = request.copy(messages = processedMessages)
-        return service.chatCompletion(newRequest)
+        
+        val priority = if (request.model.contains("gliner", ignoreCase = true)) {
+            com.tactorder.gateway.application.Priority.CRITICAL
+        } else {
+            com.tactorder.gateway.application.Priority.NORMAL
+        }
+        
+        return kotlinx.coroutines.flow.flow {
+            routerAi.queueManager.execute(priority) {
+                service.chatCompletion(newRequest).collect { emit(it) }
+            }
+        }
     }
 
     private fun processMessages(messages: List<ChatMessage>): List<ChatMessage> {
         // This logic was extracted from ChatCompletionHandler
         // In the domain model, ChatMessage content is String. 
         // We assume the Controller layer has already deserialized JSON to a structure 
-        // that we can process, or we process raw string if it contains special encoding?
-        
-        // Wait, the handler was doing manual JSON parsing of "content" field which could be list or string.
-        // Our Domain Model `ChatMessage` has `content: String`.
-        // So the API Layer must perform the mapping from raw JSON to Domain Model.
-        // BUT, the image processing logic (saving base64 to file) is Application Logic.
-        
-        // To follow Clean Arch strictly:
-        // 1. DTO (API Layer) receives complex JSON.
-        // 2. Transformer (API Layer) converts DTO to Domain Model. 
-        //    During this conversion, if complex content exists, it should be processed? 
-        //    Or we pass a complex objects to Domain?
-        
-        // For simplicity now, let's assume the string content needs <img> tag processing if it was embedded.
-        // HOWEVER, the original code processed a *List* in the JSON.
-        // If we force Domain Model to have String, the API handler must have done the flattening.
-        
+        // that we can process. TODO check or we process raw string if it contains special encoding?
         return messages
     }
 }

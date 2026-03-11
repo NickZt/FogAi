@@ -36,7 +36,7 @@ GET /v1/models
   "object": "list",
   "data": [
     {
-      "id": "remote-qwen2-0.5b-instruct",
+      "id": "mnngrpcqwen2-0.5b-instruct",
       "object": "model",
       "created": 1708456320,
       "owned_by": "tactorder"
@@ -55,7 +55,7 @@ GET /v1/models
 
 | Prefix | Service Type | Description |
 |--------|--------------|-------------|
-| `remote-` | gRPC MNN Service | Out-of-process MNN inference |
+| `mnngrpc` | gRPC MNN Service | Out-of-process MNN inference |
 | `onnx-` | gRPC ONNX Service | Out-of-process ONNX Runtime |
 | `native-` | JNI | In-process JNI (planned) |
 
@@ -73,7 +73,7 @@ POST /v1/chat/completions
 
 ```json
 {
-  "model": "remote-qwen2-0.5b-instruct",
+  "model": "mnngrpcqwen2-0.5b-instruct",
   "messages": [
     {
       "role": "system",
@@ -120,7 +120,7 @@ POST /v1/chat/completions
   "id": "chatcmpl-abc123",
   "object": "chat.completion",
   "created": 1708456320,
-  "model": "remote-qwen2-0.5b-instruct",
+  "model": "mnngrpcqwen2-0.5b-instruct",
   "choices": [
     {
       "index": 0,
@@ -144,13 +144,13 @@ POST /v1/chat/completions
 Server-Sent Events (SSE) format:
 
 ```
-data: {"id":"chatcmpl-abc123","object":"chat.completion.chunk","created":1708456320,"model":"remote-qwen2-0.5b-instruct","choices":[{"index":0,"delta":{"role":"assistant","content":"Quantum"},"finish_reason":null}]}
+data: {"id":"chatcmpl-abc123","object":"chat.completion.chunk","created":1708456320,"model":"mnngrpcqwen2-0.5b-instruct","choices":[{"index":0,"delta":{"role":"assistant","content":"Quantum"},"finish_reason":null}]}
 
-data: {"id":"chatcmpl-abc123","object":"chat.completion.chunk","created":1708456320,"model":"remote-qwen2-0.5b-instruct","choices":[{"index":0,"delta":{"content":" computing"},"finish_reason":null}]}
+data: {"id":"chatcmpl-abc123","object":"chat.completion.chunk","created":1708456320,"model":"mnngrpcqwen2-0.5b-instruct","choices":[{"index":0,"delta":{"content":" computing"},"finish_reason":null}]}
 
-data: {"id":"chatcmpl-abc123","object":"chat.completion.chunk","created":1708456320,"model":"remote-qwen2-0.5b-instruct","choices":[{"index":0,"delta":{"content":" uses"},"finish_reason":null}]}
+data: {"id":"chatcmpl-abc123","object":"chat.completion.chunk","created":1708456320,"model":"mnngrpcqwen2-0.5b-instruct","choices":[{"index":0,"delta":{"content":" uses"},"finish_reason":null}]}
 
-data: {"id":"chatcmpl-abc123","object":"chat.completion.chunk","created":1708456320,"model":"remote-qwen2-0.5b-instruct","choices":[{"index":0,"delta":{},"finish_reason":"stop"}]}
+data: {"id":"chatcmpl-abc123","object":"chat.completion.chunk","created":1708456320,"model":"mnngrpcqwen2-0.5b-instruct","choices":[{"index":0,"delta":{},"finish_reason":"stop"}]}
 
 data: [DONE]
 ```
@@ -271,7 +271,7 @@ curl -X POST http://localhost:8080/v1/chat/completions \
 ```json
 {
   "error": {
-    "message": "Model 'invalid-model' not found. Available models: remote-qwen2-0.5b-instruct, native-Qwen3-Embedding-0.6B-MNN",
+    "message": "Model 'invalid-model' not found. Available models: mnngrpcqwen2-0.5b-instruct, native-Qwen3-Embedding-0.6B-MNN",
     "type": "invalid_request_error",
     "code": "model_not_found"
   }
@@ -283,7 +283,7 @@ curl -X POST http://localhost:8080/v1/chat/completions \
 **Request:**
 ```json
 {
-  "model": "remote-qwen2-0.5b-instruct",
+  "model": "mnngrpcqwen2-0.5b-instruct",
   "messages": "invalid format"
 }
 ```
@@ -329,7 +329,7 @@ curl http://localhost:8080/v1/models
 curl -X POST http://localhost:8080/v1/chat/completions \
   -H "Content-Type: application/json" \
   -d '{
-    "model": "remote-qwen2-0.5b-instruct",
+    "model": "mnngrpcqwen2-0.5b-instruct",
     "messages": [
       {"role": "system", "content": "You are a helpful AI assistant."},
       {"role": "user", "content": "What is the capital of France?"}
@@ -344,7 +344,7 @@ curl -X POST http://localhost:8080/v1/chat/completions \
 curl -N -X POST http://localhost:8080/v1/chat/completions \
   -H "Content-Type: application/json" \
   -d '{
-    "model": "remote-qwen2-0.5b-instruct",
+    "model": "mnngrpcqwen2-0.5b-instruct",
     "messages": [{"role": "user", "content": "Write a haiku about coding"}],
     "stream": true,
     "max_tokens": 50
@@ -378,7 +378,7 @@ print(f"Available models: {[m['id'] for m in models['data']]}")
 response = requests.post(
     f"{BASE_URL}/chat/completions",
     json={
-        "model": "remote-qwen2-0.5b-instruct",
+        "model": "mnngrpcqwen2-0.5b-instruct",
         "messages": [
             {"role": "user", "content": "Explain AI in one sentence"}
         ],
@@ -392,7 +392,7 @@ print(f"Response: {result['choices'][0]['message']['content']}")
 response = requests.post(
     f"{BASE_URL}/chat/completions",
     json={
-        "model": "remote-qwen2-0.5b-instruct",
+        "model": "mnngrpcqwen2-0.5b-instruct",
         "messages": [{"role": "user", "content": "Count to 5"}],
         "stream": True,
         "max_tokens": 30
@@ -442,7 +442,7 @@ async function chatCompletion() {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
-      model: "remote-qwen2-0.5b-instruct",
+      model: "mnngrpcqwen2-0.5b-instruct",
       messages: [
         { role: "user", content: "What is 2+2?" }
       ],
@@ -460,7 +460,7 @@ async function chatCompletionStream() {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
-      model: "remote-qwen2-0.5b-instruct",
+      model: "mnngrpcqwen2-0.5b-instruct",
       messages: [{ role: "user", content: "Write a poem" }],
       stream: true,
       max_tokens: 50
@@ -537,7 +537,7 @@ openai.api_base = "http://localhost:8080/v1"
 openai.api_key = "not-needed"  # No auth currently
 
 response = openai.ChatCompletion.create(
-    model="remote-qwen2-0.5b-instruct",
+    model="mnngrpcqwen2-0.5b-instruct",
     messages=[{"role": "user", "content": "Hello!"}]
 )
 ```

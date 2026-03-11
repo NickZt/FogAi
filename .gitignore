@@ -1,6 +1,14 @@
+# Build artifacts - Gateway
 gateway/build/*
 gateway/.gradle/*
+gateway/out/
 
+# Build artifacts - Inference Services
+inference-services/mnn-service/build/*
+inference-services/onnx-service/build/
+inference-services/common/build/
+
+# CMake artifacts
 /inference-services/mnn-service/CMakeFiles/
 /inference-services/mnn-service/_deps/
 /inference-services/mnn-service/generated/
@@ -14,13 +22,6 @@ gateway/.gradle/*
 
 /gateway/libs/
 
- # Build artifacts - Gateway
-gateway/out/
-
-# Build artifacts - Inference Services
-inference-services/mnn-service/build/*
-inference-services/onnx-service/build/
-inference-services/common/build/
 
 # CMake artifacts
 CMakeCache.txt
@@ -37,6 +38,43 @@ graph_info.json
 deactivate_conanbuild.sh
 activate_conanbuild.sh
 CMakeUserPresets.json
+CMakePresets.json
+conanbuild.sh
+conanrun.sh
+conanrunenv-*.sh
+conanbuildenv-*.sh
+deactivate_conanrun.sh
+deactivate_conanbuild.sh
+*-Target-release.cmake
+*-release-x86_64-data.cmake
+*Targets.cmake
+*Config.cmake
+*ConfigVersion.cmake
+*-config.cmake
+*-config-version.cmake
+Find*.cmake
+module-*.cmake
+*.pc.cmake
+*.pc.in
+cmakedeps_macros.cmake
+/inference-services/mnn-service/conandeps_legacy.cmake
+/inference-services/onnx-service/conandeps_legacy.cmake
+
+# MNN Submodule build artifacts (don't commit submodule builds)
+inference-services/mnn-service/MNN/build/
+inference-services/mnn-service/MNN/schema/current/
+inference-services/mnn-service/cmake-build-*/
+
+# Service runtime files
+*.pid
+*_log.txt
+service.pid
+service_log.txt
+
+# Compiled static libraries
+*.a
+libinference_proto.a
+
 
 # IDE configurations
 /.idea/
@@ -69,6 +107,7 @@ models_onnx/
 __pycache__/
 *.py[cod]
 *$py.class
+*.so
 .Python
 inference_pb2.py
 inference_pb2_grpc.py
@@ -91,6 +130,7 @@ test_results/
 .cache/
 
 # OS files
+.DS_Store
 Thumbs.db
 
 # Compiled libraries
@@ -108,3 +148,6 @@ Thumbs.db
 *.ear
 hs_err_pid*
 
+/.vscode/
+/models_mnn/
+/venv/

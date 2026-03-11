@@ -4,8 +4,8 @@ project(inference_common CXX)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-find_package(Protobuf REQUIRED)
-find_package(gRPC REQUIRED)
+find_package(protobuf CONFIG REQUIRED)
+find_package(gRPC CONFIG REQUIRED)
 
 # Fetch nlohmann/json if not found
 find_package(nlohmann_json 3.11.2 QUIET)
@@ -57,6 +57,7 @@ add_library(inference_common STATIC
 target_link_libraries(inference_common PUBLIC 
     protobuf::libprotobuf 
     gRPC::grpc++
+    gRPC::grpc
     nlohmann_json::nlohmann_json
 )
 
