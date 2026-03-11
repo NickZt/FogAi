@@ -267,6 +267,24 @@ chmod +x test_integration.sh stress_test.sh
 ./test_integration.sh
 ```
 
+### Launch Web UI
+
+FogAI provides a pre-configured `docker-compose` environment featuring two popular chat interfaces: **Open WebUI** and **Lobe Chat**. These are configured out-of-the-box to interface with the FogAI Gateway.
+
+1. Ensure Docker and Docker Compose are installed.
+2. Navigate to the `UI` directory and start the services:
+
+```bash
+cd UI
+docker-compose up -d
+```
+
+3. Access the interfaces via your browser:
+   - **Open WebUI**: `http://localhost:3000`
+   - **Lobe Chat**: `http://localhost:3210` (Password: `fogai`)
+
+The UIs will automatically connect to the Gateway at `http://host.docker.internal:8080/v1` and discover your models.
+
 ## API Reference
 
 FogAI implements OpenAI-compatible endpoints:
