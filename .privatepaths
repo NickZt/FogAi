@@ -3,3 +3,4 @@
 # All paths stripped recursively.
 docs/
 scripts/sync_opensource.sh
+inference-services/stream-service-onnx/
