@@ -151,3 +151,6 @@ hs_err_pid*
 /.vscode/
 /models_mnn/
 /venv/
+
+# Private docs — auto-stripped from FogAiPrivate sync, should never appear here
+docs/
