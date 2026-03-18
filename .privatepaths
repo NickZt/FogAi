@@ -2,5 +2,6 @@
 # One path per line. Supports git-filter-repo format (glob:, regex: prefixes).
 # All paths stripped recursively.
 docs/
+doc/
 scripts/sync_opensource.sh
 inference-services/stream-service-onnx/
