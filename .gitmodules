@@ -1,3 +1,6 @@
 [submodule "inference-services/mnn-service/MNN"]
 	path = inference-services/mnn-service/MNN
 	url = https://github.com/alibaba/MNN.git
+[submodule "inference-services/stream-service-onnx"]
+	path = inference-services/stream-service-onnx
+	url = https://github.com/NickZt/stream-service.git
