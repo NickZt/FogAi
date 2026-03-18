@@ -1,0 +1,5 @@
+# Paths auto-stripped from FogAiPrivate before pushing to FogAi (public).
+# One path per line. Supports git-filter-repo format (glob:, regex: prefixes).
+# All paths stripped recursively.
+docs/
+scripts/sync_opensource.sh

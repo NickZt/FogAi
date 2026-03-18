@@ -145,3 +145,6 @@ hs_err_pid*
 /venv/
 /scripts/make_vegan_articles.py
 /scripts/make_singular.py
+
+# NOTE: docs/ is intentionally NOT ignored here.
+# docs/ is committed privately and auto-stripped before FogAi sync via .privatepaths
