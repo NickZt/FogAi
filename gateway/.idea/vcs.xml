@@ -3,5 +3,6 @@
   <component name="VcsDirectoryMappings">
     <mapping directory="$PROJECT_DIR$/.." vcs="Git" />
     <mapping directory="$PROJECT_DIR$/../inference-services/mnn-service/MNN" vcs="Git" />
+    <mapping directory="$PROJECT_DIR$/../inference-services/stream-service-onnx" vcs="Git" />
   </component>
 </project>

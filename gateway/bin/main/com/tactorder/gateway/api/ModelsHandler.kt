@@ -1,20 +1,31 @@
 package com.tactorder.gateway.api
 
 import io.vertx.ext.web.RoutingContext
-import com.tactorder.gateway.router.RouterAi
+import io.vertx.core.Vertx
+import io.vertx.core.json.JsonArray
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.CoroutineScope
 import io.vertx.kotlin.coroutines.dispatcher
+import io.vertx.kotlin.coroutines.coAwait
 
-class ModelsHandler(private val routerAi: RouterAi) {
+class ModelsHandler(private val vertx: Vertx) {
     fun handle(ctx: RoutingContext) {
         val scope = CoroutineScope(ctx.vertx().dispatcher())
         scope.launch {
             try {
-                // Returns List<String> now
-                val modelIds = routerAi.listModels()
+                // Request from ChatVerticle
+                val chatModelsReply = try {
+                    vertx.eventBus().request<JsonArray>("mnn.models.chat.request", "").coAwait().body().map { it.toString() }
+                } catch (e: Exception) { emptyList() }
                 
-                val responseList = modelIds.map { id ->
+                // Request from EmbeddingsVerticle
+                val embedModelsReply = try {
+                    vertx.eventBus().request<JsonArray>("mnn.models.embeddings.request", "").coAwait().body().map { it.toString() }
+                } catch (e: Exception) { emptyList() }
+
+                val allModels = (chatModelsReply + embedModelsReply).distinct()
+                
+                val responseList = allModels.map { id ->
                     mapOf(
                         "id" to id,
                         "object" to "model",

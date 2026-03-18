@@ -7,17 +7,20 @@ import com.tactorder.gateway.infrastructure.mnn.MnnJniService
 import com.tactorder.gateway.infrastructure.mnn.NativeEngineWrapper
 import io.vertx.core.Vertx
 
-class RouterAi(private val vertx: Vertx) {
+class RouterAi(private val vertx: Vertx, private val modelFilter: (String) -> Boolean = { true }) {
     // Registry of services by model ID
     private val services = mutableMapOf<String, InferenceService>()
 
     // Registry of nodes by prefix for fallback routing
     private val prefixRoutes = mutableMapOf<String, InferenceService>()
     
-    // Fallback or default service
     private var defaultService: InferenceService? = null
     private val logger = org.slf4j.LoggerFactory.getLogger(RouterAi::class.java)
 
+    private val serviceQueues = mutableMapOf<InferenceService, com.tactorder.gateway.application.QueueManager>()
+    private lateinit var defaultQueueConfig: com.tactorder.gateway.application.QueueConfig
+
+    @Deprecated("Use getQueueManager(service) instead for per-node concurrency")
     lateinit var queueManager: com.tactorder.gateway.application.QueueManager
         private set
 
@@ -41,9 +44,8 @@ class RouterAi(private val vertx: Vertx) {
             if (configFile.exists()) {
                 val json = io.vertx.core.json.JsonObject(configFile.readText())
                 
-                // Load Queue Config
                 val queueObj = json.getJsonObject("queue")
-                val queueConfig = if (queueObj != null) {
+                defaultQueueConfig = if (queueObj != null) {
                     com.tactorder.gateway.application.QueueConfig(
                         criticalSlaMs = queueObj.getLong("criticalSlaMs", 1000L),
                         normalSlaMs = queueObj.getLong("normalSlaMs", 10000L),
@@ -53,7 +55,7 @@ class RouterAi(private val vertx: Vertx) {
                 } else {
                     com.tactorder.gateway.application.QueueConfig()
                 }
-                queueManager = com.tactorder.gateway.application.QueueManager(queueConfig)
+                queueManager = com.tactorder.gateway.application.QueueManager(defaultQueueConfig)
                 
                 val nodesArray = json.getJsonArray("nodes")
                 
@@ -64,10 +66,13 @@ class RouterAi(private val vertx: Vertx) {
                         if (modelsArray != null) {
                             modelsArray.forEach { modelRaw ->
                                 if (modelRaw is io.vertx.core.json.JsonObject) {
-                                    explicitModels.add(com.tactorder.gateway.domain.model.ModelConfig(
-                                        id = modelRaw.getString("id"),
-                                        path = modelRaw.getString("path")
-                                    ))
+                                    val modelId = modelRaw.getString("id")
+                                    if (modelFilter(modelId)) {
+                                        explicitModels.add(com.tactorder.gateway.domain.model.ModelConfig(
+                                            id = modelId,
+                                            path = modelRaw.getString("path")
+                                        ))
+                                    }
                                 }
                             }
                         }
@@ -91,8 +96,10 @@ class RouterAi(private val vertx: Vertx) {
                                         if (modelDir.isDirectory && java.io.File(modelDir, "config.json").exists()) {
                                             // Construct ID using the prefix from nodes.json
                                             val modelId = config.prefix + modelDir.name
-                                            val path = java.io.File(modelDir, "config.json").absolutePath
-                                            scannedModels.add(com.tactorder.gateway.domain.model.ModelConfig(modelId, path))
+                                            if (modelFilter(modelId)) {
+                                                val path = java.io.File(modelDir, "config.json").absolutePath
+                                                scannedModels.add(com.tactorder.gateway.domain.model.ModelConfig(modelId, path))
+                                            }
                                         }
                                     }
                                     val updatedConfig = config.copy(models = scannedModels)
@@ -131,6 +138,8 @@ class RouterAi(private val vertx: Vertx) {
                             ?: throw IllegalArgumentException("Model path not configured for $modelId in node ${config.id}")
                     }
                 )
+                serviceQueues[mnnService] = com.tactorder.gateway.application.QueueManager(defaultQueueConfig)
+                
                 // Register models explicitly
                 config.models.forEach { model ->
                     logger.info("Registering model: ${model.id}")
@@ -145,6 +154,7 @@ class RouterAi(private val vertx: Vertx) {
                 if (config.host != null && config.port != null) {
                     val client = InferenceClient(vertx, config.host, config.port)
                     val service = GrpcInferenceService(client, config.prefix)
+                    serviceQueues[service] = com.tactorder.gateway.application.QueueManager(defaultQueueConfig)
                      
                      logger.info("Registered gRPC client for node ${config.id} (prefix: ${config.prefix})")
                      if (config.prefix.isNotEmpty()) {
@@ -157,6 +167,11 @@ class RouterAi(private val vertx: Vertx) {
                 }
             }
         }
+    }
+    
+    fun getQueueManager(service: InferenceService?): com.tactorder.gateway.application.QueueManager {
+        if (service == null) return queueManager
+        return serviceQueues[service] ?: queueManager
     }
     
     fun getService(modelId: String): InferenceService? {

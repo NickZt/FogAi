@@ -11,6 +11,8 @@ import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.withContext
 import org.slf4j.LoggerFactory
 import java.util.UUID
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 
 class MnnJniService(
     private val nativeEngine: NativeEnginePort,
@@ -19,6 +21,11 @@ class MnnJniService(
     
     private val logger = LoggerFactory.getLogger(MnnJniService::class.java)
 
+    companion object {
+        // Global lock to prevent JNI C++ memory corruption (SIGFPE) when multiple Verticles attempt to use native MNN concurrently
+        val nativeMutex = Mutex()
+    }
+
     override fun chatCompletion(request: ChatRequest): Flow<ChatResponse> {
         val modelPath = modelPathResolver(request.model)
         
@@ -26,18 +33,25 @@ class MnnJniService(
             callbackFlow {
                 try {
                     withContext(Dispatchers.IO) {
-                        // Ensure model is loaded (naive implementation: assumes single model for now or manages internally)
-                        // In a real scenario, we might want a resource manager here.
-                        nativeEngine.loadModel(modelPath)
-                        
-                        val prompt = request.messages.lastOrNull()?.content ?: ""
-                        
-                        nativeEngine.generateStringStream(prompt) { token ->
-                            if (token.isNotEmpty()) {
-                                val chunk = createChatResponse(request.model, token, null)
-                                trySend(chunk)
+                        nativeMutex.withLock {
+                            val modelDir = java.io.File(modelPath).parentFile
+                            if (!java.io.File(modelDir, "llm.mnn").exists() && !java.io.File(modelDir, "embedding.mnn").exists()) {
+                                throw IllegalStateException("Native model binary (llm.mnn / embedding.mnn) missing in $modelDir - cannot load MNN model.")
                             }
-                            true // continue
+                            
+                            // Ensure model is loaded (naive implementation: assumes single model for now or manages internally)
+                            // In a real scenario, we might want a resource manager here.
+                            nativeEngine.loadModel(modelPath)
+                            
+                            val prompt = request.messages.lastOrNull()?.content ?: ""
+                            
+                            nativeEngine.generateStringStream(prompt) { token ->
+                                if (token.isNotEmpty()) {
+                                    val chunk = createChatResponse(request.model, token, null)
+                                    trySend(chunk)
+                                }
+                                true // continue
+                            }
                         }
                         close()
                     }
@@ -50,9 +64,16 @@ class MnnJniService(
         } else {
             flow {
                 val result = withContext(Dispatchers.IO) {
-                    nativeEngine.loadModel(modelPath)
-                    val prompt = request.messages.lastOrNull()?.content ?: ""
-                    nativeEngine.generateString(prompt)
+                    nativeMutex.withLock {
+                        val modelDir = java.io.File(modelPath).parentFile
+                        if (!java.io.File(modelDir, "llm.mnn").exists() && !java.io.File(modelDir, "embedding.mnn").exists()) {
+                            throw IllegalStateException("Native model binary (llm.mnn / embedding.mnn) missing in $modelDir - cannot load MNN model.")
+                        }
+                        
+                        nativeEngine.loadModel(modelPath)
+                        val prompt = request.messages.lastOrNull()?.content ?: ""
+                        nativeEngine.generateString(prompt)
+                    }
                 }
                 emit(createChatResponse(request.model, result, "stop"))
             }.flowOn(Dispatchers.IO)
@@ -60,26 +81,33 @@ class MnnJniService(
     }
 
     override suspend fun embeddings(request: EmbeddingRequest): EmbeddingResponse = withContext(Dispatchers.IO) {
-        // Embeddings logic
-         // Naive: assumes modelPathResolver handles embedding models too or we use a different prefix
-        val modelPath = modelPathResolver(request.model)
-        nativeEngine.loadEmbeddingModel(modelPath)
+        nativeMutex.withLock {
+            // Embeddings logic
+            // Naive: assumes modelPathResolver handles embedding models too or we use a different prefix
+            val modelPath = modelPathResolver(request.model)
+            
+            val modelDir = java.io.File(modelPath).parentFile
+            if (!java.io.File(modelDir, "llm.mnn").exists() && !java.io.File(modelDir, "embedding.mnn").exists()) {
+                throw IllegalStateException("Native model binary (llm.mnn / embedding.mnn) missing in $modelDir - cannot load MNN model. Please correctly convert the model for MNN-LLM.")
+            }
+            
+            nativeEngine.loadEmbeddingModel(modelPath)
 
-        val data = request.input.mapIndexed { index, text ->
-            val floats = nativeEngine.embed(text) ?: floatArrayOf()
-            EmbeddingData(
-                objectType = "embedding",
-                embedding = floats.toList(),
-                index = index
+            val data = request.input.mapIndexed { index, text ->
+                val floats = nativeEngine.embed(text) ?: floatArrayOf()
+                EmbeddingData(
+                    objectType = "embedding",
+                    embedding = floats.toList(),
+                    index = index
+                )
+            }
+            EmbeddingResponse(
+                objectType = "list",
+                data = data,
+                model = request.model,
+                usage = Usage(0, 0, 0)
             )
         }
-
-        EmbeddingResponse(
-            objectType = "list",
-            data = data,
-            model = request.model,
-            usage = Usage(0, 0, 0)
-        )
     }
 
     override suspend fun listModels(): List<String> {
