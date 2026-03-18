@@ -44,6 +44,11 @@ graph TB
         MNNService[MNN Service<br/>AVX512/AMX]
     end
     
+    subgraph "Inference Layer - Type C: Python gRPC"
+        PyGRPC[Python Service<br/>Port 50053]
+        GLiNERService[GLiNER/Transformers<br/>Entity Extraction]
+    end
+    
     subgraph "Hardware"
         NPU[NPU / OpenCL]
         CPU[CPU - AVX512]
@@ -59,11 +64,15 @@ graph TB
     LocalEngine --> NPU
     
     Router -->|Normal Path<br/>3-5ms| GRPC
+    Router -->|Lazy/Extraction| PyGRPC
+    
     GRPC --> ONNXService
     GRPC --> MNNService
+    PyGRPC --> GLiNERService
     ONNXService --> CPU
     MNNService --> CPU
     MNNService --> GPU
+    GLiNERService --> CPU
     
     style Client fill:#e1f5ff
     style Gateway fill:#fff4e6
@@ -229,6 +238,13 @@ Edit `gateway/nodes.json` to register inference nodes:
       "host": "localhost",
       "port": 50052,
       "prefix": "onnx-"
+    },
+    {
+      "id": "type-c-python-node",
+      "type": "grpc",
+      "host": "localhost",
+      "port": 50053,
+      "prefix": "py-onnx-"
     }
   ]
 }
@@ -465,12 +481,14 @@ flowchart TD
 The Gateway automatically discovers models:
 
 1. **Local Models** (`MNN_MODELS_DIR`): Scanned and prefixed with `native-`
-2. **Remote Models**: Queried via gRPC `ListModels` and prefixed (e.g., `mnngrpc`)
+2. **Remote Models**: Queried via gRPC `ListModels` and prefixed (e.g., `mnngrpc`, `py-onnx-`)
+3. **Heartbeat Loop**: The Gateway runs a 10s polling interval (`isHealthy()`) against all nodes. Offline nodes are actively evicted from `/v1/models` in real time, and restored upon recovery.
 
 ### Routing Strategy
 
 1. **Exact Match**: Routes to service with registered model ID
-2. **Prefix Match**: Falls back to prefix-based routing (`mnngrpc*` → gRPC service)
+2. **Prefix Match**: Matches dynamic IDs (e.g., `mnngrpc*` → gRPC service)
+3. **Strict Fallback**: If a requested model does not match an *Active* node (passed the Heartbeat), the Gateway safely throws `404 Not Found` rather than forcing JNI engine failures.
 
 ## Development
 

@@ -7,7 +7,11 @@ using grpc::Server;
 using grpc::ServerBuilder;
 
 void RunServer() {
-  std::string server_address("0.0.0.0:50052"); // Port 50052 for ONNX service
+  std::string port = "50052";
+  if (const char* env_port = std::getenv("PORT")) {
+      port = env_port;
+  }
+  std::string server_address("0.0.0.0:" + port);
 
   // Load Env for models dir
   // Default to what user requested:
