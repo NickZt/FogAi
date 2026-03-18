@@ -30,6 +30,13 @@
                     "path": "models_onnx/gliner-bi-v2"
                 }
             ]
+        },
+        {
+            "id": "type-c-python-node",
+            "type": "grpc",
+            "host": "localhost",
+            "port": 50053,
+            "prefix": "py-onnx-"
         }
     ]
 }

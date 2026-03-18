@@ -16,4 +16,6 @@ interface InferenceService {
     suspend fun embeddings(request: EmbeddingRequest): EmbeddingResponse
     
     suspend fun listModels(): List<String>
+    
+    suspend fun isHealthy(): Boolean
 }

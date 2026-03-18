@@ -33,41 +33,18 @@ echo "Chat Stream PID: $CHAT_PID"
 echo "Waiting for 2 seconds to let the stream generate tokens..."
 sleep 2
 
-# Fire 10 concurrent embedding requests
-echo "2. Firing 10 Concurrent Embedding Requests..."
+# Fire the comprehensive Python backpressure and health-check testsuite
+echo "2. Firing Strict Multi-Queue Backpressure Testsuite..."
 
-for i in {1..5}; do
-  echo "Sending Qwen3 Embedding request $i..."
-  curl -s -o /dev/null -w "%{http_code}\n" -X POST http://localhost:8080/v1/embeddings \
-    -H "Content-Type: application/json" \
-    -d "{
-      \"model\": \"native-Qwen3-Embedding-4B-MNN\",
-      \"input\": \"This is a test sentence $i for vector generation and concurrency verification against the Chat model.\"
-    }" &
-done
+# Determine python executable (prefer venv if exists)
+PYTHON_CMD="python3"
+if [ -f "../venv/bin/python" ]; then
+    PYTHON_CMD="../venv/bin/python"
+fi
 
-for i in {6..10}; do
-  echo "Sending GLiNER mnngrpc Embedding request $i..."
-  curl -s -o /dev/null -w "%{http_code}\n" -X POST http://localhost:8080/v1/embeddings \
-    -H "Content-Type: application/json" \
-    -d "{
-      \"model\": \"mnngrpc-gliner-bi-v2\",
-      \"input\": \"This is a test sentence $i for vector generation using gliner.\"
-    }" &
-done
+$PYTHON_CMD ../testsuite/test_concurrency_and_health.py
 
-for i in {11..12}; do
-  echo "Sending GLiNER native  Embedding request $i..."
-  curl -s -o /dev/null -w "%{http_code}\n" -X POST http://localhost:8080/v1/embeddings \
-    -H "Content-Type: application/json" \
-    -d "{
-      \"model\": \"native-gliner-bi-v2\",
-      \"input\": \"This is a test sentence $i for vector generation using gliner.\"
-    }" &
-done
-
-# Wait for embeddings
-echo "Waiting for background processes to settle..."
+echo "Waiting for background Chat Stream process to settle..."
 wait
 
 echo -e "${GREEN}Concurrency test completed.${NC}"

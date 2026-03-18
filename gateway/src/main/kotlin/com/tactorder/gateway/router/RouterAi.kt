@@ -6,6 +6,11 @@ import com.tactorder.gateway.infrastructure.grpc.GrpcInferenceService
 import com.tactorder.gateway.infrastructure.mnn.MnnJniService
 import com.tactorder.gateway.infrastructure.mnn.NativeEngineWrapper
 import io.vertx.core.Vertx
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.launch
+import io.vertx.kotlin.coroutines.dispatcher
 
 class RouterAi(private val vertx: Vertx, private val modelFilter: (String) -> Boolean = { true }) {
     // Registry of services by model ID
@@ -14,7 +19,9 @@ class RouterAi(private val vertx: Vertx, private val modelFilter: (String) -> Bo
     // Registry of nodes by prefix for fallback routing
     private val prefixRoutes = mutableMapOf<String, InferenceService>()
     
-    private var defaultService: InferenceService? = null
+    // Tracks services that passed the heartbeat
+    private val activeServices = mutableSetOf<InferenceService>()
+    
     private val logger = org.slf4j.LoggerFactory.getLogger(RouterAi::class.java)
 
     private val serviceQueues = mutableMapOf<InferenceService, com.tactorder.gateway.application.QueueManager>()
@@ -29,6 +36,34 @@ class RouterAi(private val vertx: Vertx, private val modelFilter: (String) -> Bo
         logger.info("Initializing RouterAi...")
         loadConfig()
         logger.info("RouterAi initialized. Registered services: ${services.keys}")
+
+        // Start Heartbeat Loop
+        CoroutineScope(vertx.dispatcher()).launch {
+            while (isActive) {
+                checkHealth()
+                delay(10000L) // 10 seconds check
+            }
+        }
+    }
+
+    private suspend fun checkHealth() {
+        val allServices = serviceQueues.keys
+        for (service in allServices) {
+            val isHealthy = try { service.isHealthy() } catch (e: Exception) { false }
+            if (isHealthy) {
+                if (activeServices.add(service)) {
+                    val msg = "Node recovered: Service $service is now ACTIVE"
+                    logger.info(msg)
+                    println(msg)
+                }
+            } else {
+                if (activeServices.remove(service)) {
+                    val msg = "Node failure: Service $service is now INACTIVE"
+                    logger.warn(msg)
+                    println(msg)
+                }
+            }
+        }
     }
 
     private fun loadConfig() {
@@ -139,6 +174,7 @@ class RouterAi(private val vertx: Vertx, private val modelFilter: (String) -> Bo
                     }
                 )
                 serviceQueues[mnnService] = com.tactorder.gateway.application.QueueManager(defaultQueueConfig)
+                activeServices.add(mnnService) // Initially optimistic
                 
                 // Register models explicitly
                 config.models.forEach { model ->
@@ -155,6 +191,7 @@ class RouterAi(private val vertx: Vertx, private val modelFilter: (String) -> Bo
                     val client = InferenceClient(vertx, config.host, config.port)
                     val service = GrpcInferenceService(client, config.prefix)
                     serviceQueues[service] = com.tactorder.gateway.application.QueueManager(defaultQueueConfig)
+                    activeServices.add(service) // Initially optimistic
                      
                      logger.info("Registered gRPC client for node ${config.id} (prefix: ${config.prefix})")
                      if (config.prefix.isNotEmpty()) {
@@ -177,47 +214,50 @@ class RouterAi(private val vertx: Vertx, private val modelFilter: (String) -> Bo
     fun getService(modelId: String): InferenceService? {
         // 1. Try exact match
         val exact = services[modelId]
-        if (exact != null) return exact
+        if (exact != null && activeServices.contains(exact)) return exact
 
         // 2. Try prefix match
         for ((prefix, service) in prefixRoutes) {
-            if (modelId.startsWith(prefix)) {
+            if (modelId.startsWith(prefix) && activeServices.contains(service)) {
                 return service
             }
         }
 
-        // 3. Fallback
-        return defaultService ?: services.values.firstOrNull()
+        // 3. Strict Routing (No Fallback) - If it's down, it's down.
+        return null
     }
     
     fun registerGrpcClient(modelId: String, host: String, port: Int) {
         val client = InferenceClient(vertx, host, port)
         val service = GrpcInferenceService(client, "")
         services[modelId] = service
-        if (defaultService == null) defaultService = service
     }
     
     fun registerService(modelId: String, service: InferenceService) {
         services[modelId] = service
-        if (defaultService == null) defaultService = service
     }
 
     suspend fun listModels(): List<String> {
         val allModels = mutableSetOf<String>()
-        // 1. Local models
-        allModels.addAll(services.keys)
+        // 1. Local explicitly registered models (only if healthy)
+        for ((modelId, service) in services) {
+            if (activeServices.contains(service)) {
+                allModels.add(modelId)
+            }
+        }
         
-        // 2. Remote models via prefixRoutes
+        // 2. Remote models via prefixRoutes (only if healthy)
         for ((prefix, service) in prefixRoutes) {
-            if (service is GrpcInferenceService) {
-                try {
-                    val remoteIds = service.listModels()
-                    // Prepend prefix to make them routable via prefixRoutes
-                    remoteIds.forEach { id ->
-                        allModels.add(prefix + id)
+            if (activeServices.contains(service)) {
+                if (service is GrpcInferenceService) {
+                    try {
+                        val remoteIds = service.listModels()
+                        remoteIds.forEach { id ->
+                            allModels.add(prefix + id)
+                        }
+                    } catch (e: Exception) {
+                        logger.error("Failed to list models from remote service with prefix $prefix", e)
                     }
-                } catch (e: Exception) {
-                    logger.error("Failed to list models from remote service with prefix $prefix", e)
                 }
             }
         }

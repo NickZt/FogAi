@@ -85,4 +85,13 @@ class GrpcInferenceService(
     override suspend fun listModels(): List<String> {
         return client.listModels().modelsList.map { it.id }
     }
+    
+    override suspend fun isHealthy(): Boolean {
+        return try {
+            client.listModels()
+            true
+        } catch (e: Exception) {
+            false
+        }
+    }
 }

@@ -114,6 +114,8 @@ class MnnJniService(
         return listOf("native-qwen2-0.5b-instruct", "native-bge-m3-quant")
     }
 
+    override suspend fun isHealthy(): Boolean = true
+
     private fun createChatResponse(model: String, content: String, finishReason: String?): ChatResponse {
         return ChatResponse(
             id = "native-" + UUID.randomUUID().toString(),
